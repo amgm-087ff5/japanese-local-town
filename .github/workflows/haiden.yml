@@ -1,0 +1,102 @@
+name: haiden
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "haiden/**"
+      - "viewer/**"
+      - ".github/workflows/haiden.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: haiden/blender/requirements.txt
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install bpy and tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libxi6 libxxf86vm1 libxfixes3 libxrender1 libgl1 libegl1 libsm6 libxkbcommon0 fonts-noto-cjk
+          python -m pip install -r haiden/blender/requirements.txt
+          npm install --no-save --prefix "$RUNNER_TEMP/gt" @gltf-transform/cli@4
+          echo "$RUNNER_TEMP/gt/node_modules/.bin" >> "$GITHUB_PATH"
+
+      - name: Build model
+        run: python haiden/blender/build_haiden.py --out haiden/out
+
+      - name: Render
+        env:
+          HAIDEN_QUALITY: final
+        run: python haiden/blender/render.py --out haiden/out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: haiden-out
+          path: haiden/out
+          if-no-files-found: error
+
+  pages:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: haiden-out
+          path: haiden/out
+
+      - name: Assemble _site
+        run: |
+          set -eu
+          mkdir -p _site/app _site/models _site/renders
+          if [ -f viewer/quick.html ]; then cp viewer/quick.html _site/index.html; fi
+          if [ -f viewer/index.html ]; then
+            cp viewer/index.html _site/app/index.html
+            if [ ! -f _site/index.html ]; then cp viewer/index.html _site/index.html; fi
+          fi
+          # other viewer assets (exclude html already placed and tests)
+          if [ -d viewer ]; then
+            (cd viewer && find . -type f ! -name 'index.html' ! -name 'quick.html' ! -path './test/*' ! -name '*.md' -print0) |
+              while IFS= read -r -d '' f; do mkdir -p "_site/$(dirname "$f")"; cp "viewer/$f" "_site/$f"; done
+          fi
+          cp haiden/out/haiden_web.glb _site/models/haiden_web.glb
+          if [ -f haiden/out/stats.json ]; then cp haiden/out/stats.json _site/models/stats.json; fi
+          if compgen -G "haiden/out/renders/*.png" > /dev/null; then cp haiden/out/renders/*.png _site/renders/; fi
+          touch _site/.nojekyll
+          ls -laR _site | head -50
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

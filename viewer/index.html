@@ -828,8 +828,8 @@ loop();
 (async () => {
   const q = new URLSearchParams(location.search).get('model');
   if (q) { await loadURL(q); return; }
-  // 同階層の haiden_web.glb → リポジトリ構成の ../out/haiden_web.glb の順に探す
-  for (const u of ['haiden_web.glb', '../out/haiden_web.glb']) {
+  // Pages 構成 (/app/ → ../models/) → 同階層 → リポジトリ構成 (viewer/ → ../haiden/out/) の順に探す
+  for (const u of ['../models/haiden_web.glb', 'haiden_web.glb', '../haiden/out/haiden_web.glb']) {
     try {
       const r = await fetch(u, { method: 'HEAD', cache: 'no-store' });
       if (r.ok && !/text\/html/i.test(r.headers.get('content-type') || '')) { if (await loadURL(u, 'haiden_web.glb', true)) return; }

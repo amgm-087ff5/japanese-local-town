@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>拝殿 クイックビュー</title>
+<meta name="description" content="拝殿モデルをすぐに眺めるための軽量 3D ビュー">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22%3E%3Cpath d=%22M2 5.5c6 1 14 1 20 0M4 9h16M6.5 9v13M17.5 9v13%22 stroke=%22%23c0432a%22 stroke-width=%222.4%22 fill=%22none%22 stroke-linecap=%22round%22/%3E%3C/svg%3E">
+<!-- 読込最速化:モデルとライブラリを並行して先読み -->
+<link rel="preload" href="models/haiden_web.glb" as="fetch" type="model/gltf-binary" crossorigin="anonymous">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js">
+<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/loaders/GLTFLoader.js">
+<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/loaders/DRACOLoader.js">
+<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/controls/OrbitControls.js">
+<!-- 見出しの文字だけを取得する軽量サブセット -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@700&text=%E6%8B%9D%E6%AE%BF%E7%AE%B1%E5%BA%AD&display=swap">
+<style>
+:root {
+  --bg: #efe9dc; --surface: #f8f4ea; --ink: #2b2925; --ink-2: #5d574d; --ink-3: #8a8274; --line: #d6cdb9;
+  --shu: #c0432a; --shu-soft: rgba(192, 67, 42, .14); --glass: rgba(248, 244, 234, .88);
+  --font-ui: "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", system-ui, sans-serif;
+  --font-head: "Shippori Mincho", "Hiragino Mincho ProN", "Yu Mincho", serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1b1916; --surface: #24211d; --ink: #ece5d6; --ink-2: #bdb4a3; --ink-3: #8c8476; --line: #3c372f;
+    --shu: #e0613f; --shu-soft: rgba(224, 97, 63, .18); --glass: rgba(36, 33, 29, .86); color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1b1916; --surface: #24211d; --ink: #ece5d6; --ink-2: #bdb4a3; --ink-3: #8c8476; --line: #3c372f;
+  --shu: #e0613f; --shu-soft: rgba(224, 97, 63, .18); --glass: rgba(36, 33, 29, .86); color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; }
+body { background: var(--bg); color: var(--ink); font: 13px/1.5 var(--font-ui); display: flex; flex-direction: column; -webkit-tap-highlight-color: transparent; }
+#stage { position: relative; flex: 1; min-height: 0; background: linear-gradient(#7fa7c9, #c9dbe6 55%, #efe6d2); }
+#stage canvas { display: block; width: 100%; height: 100%; touch-action: none; outline: none; }
+
+.title {
+  position: absolute; z-index: 5; top: calc(10px + env(safe-area-inset-top)); left: 12px; display: flex; flex-direction: column; gap: 4px;
+  padding: 8px 12px; background: var(--glass); border: 1px solid var(--line); border-radius: 8px; pointer-events: none; max-width: calc(100% - 24px);
+}
+.title h1 { margin: 0; font: 700 17px/1.2 var(--font-head); letter-spacing: .14em; display: flex; align-items: center; gap: 8px; }
+.title h1 svg { width: 20px; height: 20px; flex: none; }
+.stats { display: flex; flex-wrap: wrap; gap: 2px 10px; color: var(--ink-2); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.stats:empty { display: none; }
+.stats b { color: var(--ink); font-weight: 600; }
+
+.tools {
+  position: absolute; z-index: 5; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end;
+}
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 38px; min-width: 38px; padding: 0 12px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--glass); color: var(--ink); font: inherit; font-size: 13px;
+  cursor: pointer; text-decoration: none; white-space: nowrap; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+}
+.btn:hover { border-color: var(--ink-3); }
+.btn:focus-visible { outline: 2px solid var(--shu); outline-offset: 1px; }
+.btn[aria-pressed="true"] { background: var(--shu-soft); border-color: var(--shu); color: var(--shu); }
+.btn.primary { background: var(--shu); border-color: var(--shu); color: #fff; }
+.btn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+.progress { position: absolute; z-index: 6; left: 0; right: 0; top: 0; height: 3px; background: rgba(0,0,0,.06); transition: opacity .4s; }
+.progress i { display: block; height: 100%; width: 0; background: var(--shu); transition: width .15s; }
+.progress.done { opacity: 0; }
+.status {
+  position: absolute; z-index: 6; left: 50%; top: 50%; transform: translate(-50%, -50%); text-align: center; padding: 14px 20px;
+  background: var(--glass); border: 1px solid var(--line); border-radius: 10px; color: var(--ink-2); font-variant-numeric: tabular-nums; max-width: calc(100% - 32px);
+}
+.status b { display: block; font-size: 20px; color: var(--shu); }
+.status[hidden] { display: none; }
+.status.err b { font-size: 15px; }
+
+/* レンダ画像サムネ */
+.renders { flex: none; display: flex; gap: 8px; overflow-x: auto; padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--surface); scrollbar-width: thin; }
+.renders[hidden] { display: none; }
+.renders a { flex: none; display: block; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--bg); }
+.renders a:hover, .renders a:focus-visible { border-color: var(--shu); outline: none; }
+.renders img { display: block; height: 84px; width: auto; min-width: 84px; object-fit: cover; }
+
+@media (max-width: 520px) {
+  .btn .lbl { display: none; }
+  .btn { padding: 0 10px; }
+  .renders img { height: 68px; min-width: 68px; }
+}
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<main id="stage" aria-label="拝殿の3Dビュー">
+  <div class="progress" id="progress"><i></i></div>
+  <div class="title">
+    <h1><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 5.5c6 1 14 1 20 0M4 9h16M6.5 9v13M17.5 9v13" stroke="var(--shu)" stroke-width="2.4" fill="none" stroke-linecap="round"/></svg>拝殿</h1>
+    <div class="stats" id="stats"></div>
+  </div>
+  <div class="status" id="status" role="status" aria-live="polite"><b id="pct">0%</b><span id="sub">読み込み中…</span></div>
+  <div class="tools">
+    <button class="btn" id="btnReset" title="視点リセット"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4.5h4.5"/></svg><span class="lbl">視点</span></button>
+    <button class="btn" id="btnRotate" aria-pressed="true" title="自動回転 ON/OFF"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 0 1-14.3 4.9M4 12a8 8 0 0 1 14.3-4.9M18.5 3v4.2h-4.2M5.5 21v-4.2h4.2"/></svg><span class="lbl">回転</span></button>
+    <button class="btn" id="btnWire" aria-pressed="false" title="ワイヤーフレーム切替"><svg viewBox="0 0 24 24"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9zM4 7.5l8 4.5 8-4.5M12 12v9"/></svg><span class="lbl">ワイヤー</span></button>
+    <a class="btn primary" id="appLink" href="app/?model=../models/haiden_web.glb" title="全機能のアプリ版ビューアで開く"><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"/></svg>アプリ版で開く</a>
+  </div>
+</main>
+<nav class="renders" id="renders" aria-label="レンダ画像" hidden></nav>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+
+const MODEL = 'models/haiden_web.glb';
+const STATS = 'models/stats.json';
+const $ = (id) => document.getElementById(id);
+const state = window.viewerState = { loaded: false, error: null, tris: 0 };
+
+/* ---------- stats.json(任意)とレンダ画像 ---------- */
+let statsBytes = 0;
+const fmtNum = (n) => Number(n).toLocaleString('ja-JP');
+const fmtBytes = (b) => b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.round(b / 1024) + ' KB';
+const STAT_KEYS = [
+  [['triangles', 'tris', 'tri_count', 'polygons', 'polys', 'faces'], '△', fmtNum],
+  [['vertices', 'verts', 'vertex_count'], '頂点', fmtNum],
+  [['objects', 'meshes', 'mesh_count', 'parts'], '部材', fmtNum],
+  [['materials', 'material_count'], '材質', fmtNum],
+  [['glb_bytes', 'size_bytes', 'file_size', 'bytes'], '', fmtBytes],
+  [['dimensions', 'size_m', 'dims'], '寸法', (v) => Array.isArray(v) ? v.map((x) => (+x).toFixed(1)).join('×') + ' m' : v],
+];
+fetch(STATS, { cache: 'no-cache' }).then((r) => (r.ok ? r.json() : null)).then((s) => {
+  if (!s || typeof s !== 'object') return;
+  const out = [];
+  for (const [keys, label, fmt] of STAT_KEYS) {
+    const k = keys.find((x) => s[x] !== undefined && s[x] !== null);
+    if (!k) continue;
+    if (fmt === fmtBytes) statsBytes = +s[k] || 0;
+    out.push(`<span>${label ? label + ' ' : ''}<b>${String(fmt(s[k])).replace(/[<&>]/g, '')}</b></span>`);
+  }
+  const date = s.generated || s.updated || s.date;
+  if (date) out.push(`<span>${String(date).slice(0, 16).replace('T', ' ').replace(/[<&>]/g, '')}</span>`);
+  $('stats').innerHTML = out.join('');
+  showRenders(s.renders);
+}).catch(() => { /* stats.json が無い/不正なら表示しない */ });
+
+function showRenders(list) {
+  if (!Array.isArray(list) || !list.length) return;
+  const nav = $('renders');
+  for (const it of list.slice(0, 40)) {
+    const src0 = typeof it === 'string' ? it : it && (it.src || it.file || it.path || it.name);
+    if (!src0 || /^(javascript|data):/i.test(src0)) continue;
+    const src = /^(https?:)?\/\//.test(src0) || src0.startsWith('renders/') ? src0 : 'renders/' + src0.replace(/^\.?\//, '');
+    const title = (typeof it === 'object' && it.title) || src0.split('/').pop();
+    const a = document.createElement('a');
+    a.href = src; a.target = '_blank'; a.rel = 'noopener'; a.title = title;
+    const img = document.createElement('img');
+    img.src = src; img.alt = title; img.loading = 'lazy'; img.decoding = 'async';
+    img.onerror = () => a.remove();
+    a.append(img); nav.append(a);
+  }
+  if (nav.children.length) { nav.hidden = false; requestAnimationFrame(resize); }
+}
+
+/* ---------- レンダラ ---------- */
+const stage = $('stage');
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));   // 上限で負荷を抑える
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.autoUpdate = false;
+stage.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = (() => {
+  const c = document.createElement('canvas'); c.width = 2; c.height = 128;
+  const g = c.getContext('2d'), gr = g.createLinearGradient(0, 0, 0, 128);
+  gr.addColorStop(0, '#7fa7c9'); gr.addColorStop(0.55, '#c9dbe6'); gr.addColorStop(1, '#efe6d2');
+  g.fillStyle = gr; g.fillRect(0, 0, 2, 128);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+})();
+const camera = new THREE.PerspectiveCamera(38, 1, 0.05, 2000);
+camera.position.set(10, 6, 12);
+
+// 環境マップの代わりに軽量なライト構成(半球光+太陽+補助光)
+const hemi = new THREE.HemisphereLight(0xe4eef8, 0x8a7a62, 1.6);
+const sun = new THREE.DirectionalLight(0xfff0d8, 2.6);
+sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02;
+const fill = new THREE.DirectionalLight(0xdfe8f2, 1.1);
+scene.add(hemi, sun, sun.target, fill);
+
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.ShadowMaterial({ opacity: 0.25 }));
+ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true;
+scene.add(ground);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.dampingFactor = 0.08; controls.screenSpacePanning = true;
+controls.autoRotate = true; controls.autoRotateSpeed = 1.0; controls.maxPolarAngle = Math.PI * 0.495;
+
+let model = null, home = null;
+let needsRender = true;
+const invalidate = () => { needsRender = true; };
+controls.addEventListener('change', invalidate);
+function resize() {
+  const w = stage.clientWidth, h = stage.clientHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / Math.max(1, h); camera.updateProjectionMatrix();
+  if (home) fit();
+  invalidate();
+}
+window.addEventListener('resize', resize);
+(function loop() {
+  requestAnimationFrame(loop);
+  const moving = controls.update();
+  if (!needsRender && !moving && !controls.autoRotate) return;
+  needsRender = false;
+  renderer.render(scene, camera);
+})();
+
+/* ---------- 視点 ---------- */
+function fit() {
+  const { center, radius } = home;
+  const fov = THREE.MathUtils.degToRad(camera.fov);
+  const fitH = radius / Math.sin(fov / 2);
+  const fitW = radius / Math.sin(Math.atan(Math.tan(fov / 2) * camera.aspect));
+  const dist = Math.max(fitH, fitW) * 0.92;   // 外接球は余白が大きいので少し寄せる
+  const dir = new THREE.Vector3(1, 0.55, 1.25).normalize();
+  controls.target.copy(center);
+  camera.position.copy(center).addScaledVector(dir, dist);
+  camera.near = Math.max(dist / 1000, 0.001); camera.far = dist * 20 + radius * 10;
+  camera.updateProjectionMatrix();
+  controls.minDistance = radius * 0.05; controls.maxDistance = dist * 6;
+  controls.update(); invalidate();
+}
+$('btnReset').addEventListener('click', () => { if (home) fit(); });
+$('btnRotate').addEventListener('click', (e) => {
+  controls.autoRotate = !controls.autoRotate;
+  e.currentTarget.setAttribute('aria-pressed', controls.autoRotate); invalidate();
+});
+// 触ったら自動回転を止める(ボタン表示も同期)
+controls.addEventListener('start', () => {
+  if (controls.autoRotate) { controls.autoRotate = false; $('btnRotate').setAttribute('aria-pressed', 'false'); }
+});
+$('btnWire').addEventListener('click', (e) => {
+  if (!model) return;
+  const on = e.currentTarget.getAttribute('aria-pressed') !== 'true';
+  e.currentTarget.setAttribute('aria-pressed', on);
+  model.traverse((o) => { if (o.isMesh) [].concat(o.material).forEach((m) => { if ('wireframe' in m) m.wireframe = on; }); });
+  invalidate();
+});
+
+/* ---------- 読み込み ---------- */
+function progress(loaded, total) {
+  const t = total || statsBytes;
+  const p = t ? Math.min(1, loaded / t) : -1;
+  $('progress').firstElementChild.style.width = (p < 0 ? 35 : p * 100) + '%';
+  $('pct').textContent = p < 0 ? fmtBytes(loaded) : Math.round(p * 100) + '%';
+  $('sub').textContent = p < 0 ? '読み込み中…' : `${fmtBytes(loaded)} / ${fmtBytes(t)}`;
+}
+const draco = new DRACOLoader().setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/libs/draco/gltf/');
+draco.preload();   // GLB のダウンロードと並行してデコーダを取得
+const loader = new GLTFLoader().setDRACOLoader(draco);
+const t0 = performance.now();
+loader.load(MODEL, (gltf) => {
+  model = gltf.scene;
+  let tris = 0;
+  model.traverse((o) => {
+    if (!o.isMesh) return;
+    o.castShadow = o.receiveShadow = true;
+    const g = o.geometry; tris += (g.index ? g.index.count : g.attributes.position.count) / 3 * (o.isInstancedMesh ? o.count : 1);
+  });
+  scene.add(model);
+  model.updateMatrixWorld(true);
+  model.traverse((o) => { o.matrixAutoUpdate = false; });
+  const box = new THREE.Box3().setFromObject(model, true);
+  const sphere = box.getBoundingSphere(new THREE.Sphere());
+  home = { center: sphere.center, radius: Math.max(sphere.radius, 0.01) };
+  const r = home.radius, c = home.center;
+  ground.scale.setScalar(r * 8); ground.position.set(c.x, box.min.y + r * 0.0005, c.z);
+  sun.position.set(c.x + r * 1.2, c.y + r * 2, c.z + r * 1.0); sun.target.position.copy(c); sun.target.updateMatrixWorld();
+  Object.assign(sun.shadow.camera, { left: -r * 1.3, right: r * 1.3, top: r * 1.3, bottom: -r * 1.3, near: 0.01, far: r * 6 });
+  sun.shadow.camera.updateProjectionMatrix();
+  fill.position.set(c.x - r, c.y + r * 0.6, c.z - r * 0.8);
+  renderer.shadowMap.needsUpdate = true;
+  fit();
+  state.tris = Math.round(tris);
+  if (!$('stats').textContent) $('stats').innerHTML = `<span>△ <b>${fmtNum(state.tris)}</b></span>`;
+  $('progress').classList.add('done'); $('status').hidden = true;
+  state.loaded = true; state.ms = Math.round(performance.now() - t0);
+}, (ev) => progress(ev.loaded, ev.lengthComputable ? ev.total : 0), (err) => {
+  console.warn('読込失敗:', err);
+  state.error = String(err && err.message || err);
+  $('progress').classList.add('done');
+  $('status').classList.add('err');
+  $('pct').textContent = 'モデルを読み込めませんでした';
+  $('sub').textContent = MODEL;
+});
+resize();
+</script>
+</body>
+</html>

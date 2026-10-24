@@ -1,0 +1,842 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>箱庭 3Dビューア</title>
+<meta name="description" content="GLB/GLTF をブラウザで読み込み、回して眺める簡易3Dビューア">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22%3E%3Cpath d=%22M2 5.5c6 1 14 1 20 0M4 9h16M6.5 9v13M17.5 9v13%22 stroke=%22%23c0432a%22 stroke-width=%222.4%22 fill=%22none%22 stroke-linecap=%22round%22/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+<style>
+:root {
+  --bg: #efe9dc;          /* 生成り */
+  --surface: #f8f4ea;
+  --surface-2: #ebe4d4;
+  --ink: #2b2925;         /* 墨 */
+  --ink-2: #5d574d;
+  --ink-3: #8a8274;
+  --line: #d6cdb9;
+  --shu: #c0432a;         /* 朱 */
+  --shu-soft: rgba(192, 67, 42, .12);
+  --shadow: 0 6px 24px rgba(43, 41, 37, .12);
+  --glass: rgba(248, 244, 234, .9);
+  --font-ui: "Zen Kaku Gothic New", "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
+  --font-head: "Shippori Mincho", "Hiragino Mincho ProN", "Yu Mincho", serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1b1916; --surface: #24211d; --surface-2: #2e2a25;
+    --ink: #ece5d6; --ink-2: #bdb4a3; --ink-3: #8c8476; --line: #3c372f;
+    --shu: #e0613f; --shu-soft: rgba(224, 97, 63, .16);
+    --shadow: 0 6px 24px rgba(0, 0, 0, .4); --glass: rgba(36, 33, 29, .9);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1b1916; --surface: #24211d; --surface-2: #2e2a25;
+  --ink: #ece5d6; --ink-2: #bdb4a3; --ink-3: #8c8476; --line: #3c372f;
+  --shu: #e0613f; --shu-soft: rgba(224, 97, 63, .16);
+  --shadow: 0 6px 24px rgba(0, 0, 0, .4); --glass: rgba(36, 33, 29, .9);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; }
+body { background: var(--bg); color: var(--ink); font: 14px/1.5 var(--font-ui); -webkit-tap-highlight-color: transparent; }
+button, select, input { font: inherit; color: inherit; }
+#stage { position: fixed; inset: 0; }
+#stage canvas { display: block; width: 100%; height: 100%; touch-action: none; outline: none; }
+
+/* 上部バー */
+.topbar {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 20; display: flex; align-items: center; gap: 8px;
+  padding: calc(8px + env(safe-area-inset-top)) 12px 8px; background: var(--glass); border-bottom: 1px solid var(--line);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+}
+.brand { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
+.brand .mark { width: 22px; height: 22px; flex: none; }
+.brand h1 { margin: 0; font: 700 16px/1.2 var(--font-head); letter-spacing: .08em; white-space: nowrap; }
+.brand .fname { color: var(--ink-3); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 34px; padding: 0 12px;
+  border: 1px solid var(--line); border-radius: 6px; background: var(--surface); cursor: pointer; white-space: nowrap;
+  transition: background .15s, border-color .15s;
+}
+.btn:hover { border-color: var(--ink-3); }
+.btn:focus-visible, select:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--shu); outline-offset: 1px; }
+.btn.primary { background: var(--shu); border-color: var(--shu); color: #fff; }
+.btn.icon { width: 34px; padding: 0; }
+.btn[aria-pressed="true"] { background: var(--shu-soft); border-color: var(--shu); color: var(--shu); }
+.btn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+
+/* サイドパネル */
+.panel {
+  position: fixed; z-index: 15; top: 62px; right: 12px; bottom: 12px; width: 300px; display: flex; flex-direction: column;
+  background: var(--glass); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); transition: transform .25s ease, opacity .25s;
+}
+.panel.collapsed { transform: translateX(calc(100% + 16px)); opacity: 0; pointer-events: none; }
+.panel-scroll { overflow-y: auto; overscroll-behavior: contain; padding: 4px 0 8px; flex: 1; }
+.sec { border-bottom: 1px solid var(--line); }
+.sec:last-child { border-bottom: 0; }
+.sec > summary {
+  list-style: none; cursor: pointer; padding: 10px 14px; display: flex; align-items: center; gap: 8px;
+  font: 700 13px/1.3 var(--font-head); letter-spacing: .1em; user-select: none;
+}
+.sec > summary::-webkit-details-marker { display: none; }
+.sec > summary::before { content: ""; width: 3px; height: 12px; background: var(--shu); border-radius: 1px; }
+.sec > summary::after { content: "＋"; margin-left: auto; color: var(--ink-3); font-family: var(--font-ui); font-weight: 400; }
+.sec[open] > summary::after { content: "－"; }
+.sec-body { padding: 0 14px 12px; display: grid; gap: 10px; }
+.row { display: flex; align-items: center; gap: 8px; min-height: 30px; }
+.row > label:not(.switch), .row > .lbl { color: var(--ink-2); font-size: 13px; flex: none; width: 84px; }
+.row > .ctl { flex: 1; min-width: 0; display: flex; gap: 6px; flex-wrap: wrap; }
+.seg { display: flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; flex: 1; }
+.seg button { flex: 1; border: 0; background: var(--surface); padding: 5px 4px; cursor: pointer; font-size: 12.5px; border-right: 1px solid var(--line); }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--shu); color: #fff; }
+select { height: 30px; flex: 1; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); padding: 0 8px; }
+input[type="range"] { flex: 1; accent-color: var(--shu); min-width: 0; }
+.val { font-variant-numeric: tabular-nums; color: var(--ink-2); width: 36px; text-align: right; font-size: 12.5px; }
+.switch { position: relative; width: 38px; height: 22px; flex: none; }
+.switch input { opacity: 0; position: absolute; inset: 0; margin: 0; cursor: pointer; z-index: 1; }
+.switch span { position: absolute; inset: 0; border-radius: 11px; background: var(--line); transition: background .15s; }
+.switch span::after { content: ""; position: absolute; left: 3px; top: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--surface); box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: transform .15s; }
+.switch input:checked + span { background: var(--shu); }
+.switch input:checked + span::after { transform: translateX(16px); }
+.switch input:focus-visible + span { outline: 2px solid var(--shu); outline-offset: 2px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.grid2 .btn { height: 32px; font-size: 13px; }
+
+/* 情報 */
+dl.info { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 13px; }
+dl.info dt { color: var(--ink-3); }
+dl.info dd { margin: 0; font-variant-numeric: tabular-nums; text-align: right; word-break: break-all; }
+
+/* ツリー */
+.tree-tools { display: flex; gap: 6px; }
+.tree-tools input { flex: 1; min-width: 0; height: 30px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); padding: 0 8px; }
+.tree-tools .btn { height: 30px; padding: 0 8px; font-size: 12px; }
+.tree { font-size: 13px; max-height: 42vh; overflow: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); padding: 4px 0; }
+.tree ul { list-style: none; margin: 0; padding: 0 0 0 14px; }
+.tree > ul { padding-left: 2px; }
+.tree li { margin: 0; }
+.tnode { display: flex; align-items: center; gap: 4px; padding: 2px 6px 2px 0; min-height: 26px; }
+.tnode:hover { background: var(--shu-soft); }
+.tnode .tog { width: 18px; height: 18px; border: 0; background: none; cursor: pointer; padding: 0; color: var(--ink-3); flex: none; font-size: 10px; }
+.tnode .tog.leaf { visibility: hidden; }
+.tnode input { accent-color: var(--shu); margin: 0; flex: none; width: 15px; height: 15px; }
+.tnode .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.tnode .nm.mesh::before { content: "◆ "; color: var(--shu); font-size: 9px; }
+.tnode.off .nm { color: var(--ink-3); text-decoration: line-through; }
+.tree .empty { color: var(--ink-3); padding: 8px 10px; }
+
+/* 下部HUD */
+.hud {
+  position: fixed; z-index: 10; left: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); display: flex; gap: 10px; align-items: center;
+  padding: 6px 10px; font-size: 12px; color: var(--ink-2); background: var(--glass); border: 1px solid var(--line); border-radius: 6px;
+  font-variant-numeric: tabular-nums; pointer-events: none;
+}
+.hud b { color: var(--ink); font-weight: 500; }
+
+/* ロード進捗 */
+.progress { position: fixed; z-index: 30; left: 0; right: 0; top: 0; height: 3px; pointer-events: none; opacity: 0; transition: opacity .3s; }
+.progress.on { opacity: 1; }
+.progress i { display: block; height: 100%; width: 0; background: var(--shu); transition: width .15s; }
+.loading {
+  position: fixed; z-index: 12; left: 50%; top: 50%; transform: translate(-50%, -50%); display: none; text-align: center;
+  background: var(--glass); border: 1px solid var(--line); border-radius: 10px; padding: 18px 24px; box-shadow: var(--shadow);
+}
+.loading.on { display: block; }
+.loading .pct { font: 700 22px var(--font-head); color: var(--shu); }
+.loading .sub { color: var(--ink-2); font-size: 12px; }
+
+/* 空状態 */
+.empty-state {
+  position: fixed; z-index: 11; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(420px, calc(100vw - 32px));
+  text-align: center; padding: 28px 24px; background: var(--glass); border: 1px dashed var(--ink-3); border-radius: 12px;
+}
+.empty-state[hidden] { display: none; }
+.empty-state h2 { font: 700 20px/1.4 var(--font-head); letter-spacing: .1em; margin: 6px 0 8px; }
+.empty-state p { margin: 0 0 16px; color: var(--ink-2); font-size: 13px; }
+.empty-state .torii { width: 64px; height: 52px; color: var(--shu); }
+.empty-state code { font-size: 12px; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+
+/* D&D */
+.drop {
+  position: fixed; inset: 0; z-index: 50; display: none; align-items: center; justify-content: center;
+  background: rgba(192, 67, 42, .1); border: 3px dashed var(--shu); font: 700 22px var(--font-head); color: var(--shu); letter-spacing: .1em;
+}
+.drop.on { display: flex; }
+.toast {
+  position: fixed; z-index: 60; left: 50%; bottom: 24px; transform: translate(-50%, 20px); opacity: 0; transition: .25s;
+  background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 8px; font-size: 13px; max-width: calc(100vw - 32px); pointer-events: none;
+}
+.toast.on { opacity: 1; transform: translate(-50%, 0); }
+.toast.err { background: var(--shu); color: #fff; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+/* スマホ:パネルはボトムシート */
+@media (max-width: 640px) {
+  .topbar { padding-left: 10px; padding-right: 10px; gap: 6px; }
+  .brand .fname { display: none; }
+  .btn.lbl-hide span { display: none; }
+  .btn.lbl-hide { width: 34px; padding: 0; }
+  .panel { top: auto; left: 0; right: 0; bottom: 0; width: auto; max-height: 58vh; border-radius: 12px 12px 0 0; border-bottom: 0; padding-bottom: env(safe-area-inset-bottom); }
+  .panel.collapsed { transform: translateY(calc(100% + 16px)); }
+  .hud { left: 8px; bottom: calc(8px + env(safe-area-inset-bottom)); font-size: 11px; gap: 8px; }
+  .tree { max-height: 30vh; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<div id="stage" aria-label="3Dビュー"></div>
+<div class="progress" id="progress"><i></i></div>
+
+<header class="topbar">
+  <div class="brand">
+    <svg class="mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 5.5c6 1 14 1 20 0M4 9h16M6.5 9v13M17.5 9v13M5 5.8 4 9m15-3.2L20 9" stroke="var(--shu)" stroke-width="2.2" fill="none" stroke-linecap="round"/></svg>
+    <h1>箱庭ビューア</h1>
+    <span class="fname" id="fnameTop"></span>
+  </div>
+  <input type="file" id="fileInput" accept=".glb,.gltf,.bin,.png,.jpg,.jpeg,.webp,.ktx2" multiple hidden>
+  <button class="btn primary lbl-hide" id="btnOpen" title="ファイルを開く"><svg viewBox="0 0 24 24"><path d="M3 7h6l2 2h10v10H3z"/></svg><span>開く</span></button>
+  <button class="btn icon" id="btnShot" title="スクリーンショット保存 (PNG)"><svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></button>
+  <button class="btn icon" id="btnTheme" title="ライト/ダーク切替"><svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg></button>
+  <button class="btn icon" id="btnPanel" title="パネルの開閉" aria-expanded="true" aria-controls="panel"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+</header>
+
+<aside class="panel" id="panel" aria-label="設定パネル">
+  <div class="panel-scroll">
+    <details class="sec" open>
+      <summary>情報</summary>
+      <div class="sec-body">
+        <dl class="info">
+          <dt>ファイル</dt><dd id="iName">—</dd>
+          <dt>三角形</dt><dd id="iTris">—</dd>
+          <dt>オブジェクト</dt><dd id="iObjs">—</dd>
+          <dt>寸法 (m)</dt><dd id="iDims">—</dd>
+          <dt>読込</dt><dd id="iLoad">—</dd>
+        </dl>
+      </div>
+    </details>
+
+    <details class="sec" open>
+      <summary>視点</summary>
+      <div class="sec-body">
+        <div class="grid2">
+          <button class="btn" data-view="front">正面</button>
+          <button class="btn" data-view="side">側面</button>
+          <button class="btn" data-view="top">上</button>
+          <button class="btn" data-view="iso">斜め</button>
+        </div>
+        <div class="grid2">
+          <button class="btn" id="btnFit">全体に合わせる</button>
+          <button class="btn" id="btnRotate" aria-pressed="false">自動回転</button>
+        </div>
+      </div>
+    </details>
+
+    <details class="sec" open>
+      <summary>描画</summary>
+      <div class="sec-body">
+        <div class="row"><span class="lbl">背景</span>
+          <div class="ctl"><div class="seg" id="segBg">
+            <button data-bg="sky" aria-pressed="true">空</button><button data-bg="dark" aria-pressed="false">暗</button><button data-bg="light" aria-pressed="false">明</button>
+          </div></div></div>
+        <div class="row"><label for="selTone">トーン</label>
+          <div class="ctl"><select id="selTone"><option value="aces">ACES Filmic</option><option value="agx">AgX</option><option value="neutral">Neutral</option><option value="none">なし</option></select></div></div>
+        <div class="row"><label for="rngExp">露出</label>
+          <div class="ctl"><input type="range" id="rngExp" min="0.2" max="3" step="0.05" value="1"><span class="val" id="vExp">1.00</span></div></div>
+        <div class="row"><label for="rngEnv">環境光</label>
+          <div class="ctl"><input type="range" id="rngEnv" min="0" max="2" step="0.05" value="1"><span class="val" id="vEnv">1.00</span></div></div>
+        <div class="row"><label for="rngSun">日差し</label>
+          <div class="ctl"><input type="range" id="rngSun" min="0" max="6" step="0.1" value="2.5"><span class="val" id="vSun">2.5</span></div></div>
+        <div class="row"><label for="rngAz">日の向き</label>
+          <div class="ctl"><input type="range" id="rngAz" min="0" max="360" step="5" value="135"><span class="val" id="vAz">135°</span></div></div>
+        <div class="row"><label for="chkShadow">影</label><label class="switch"><input type="checkbox" id="chkShadow" checked><span></span></label></div>
+        <div class="row"><label for="chkGround">地面</label><label class="switch"><input type="checkbox" id="chkGround" checked><span></span></label></div>
+        <div class="row"><label for="chkGrid">グリッド</label><label class="switch"><input type="checkbox" id="chkGrid" checked><span></span></label></div>
+        <div class="row"><label for="chkWire">ワイヤー</label><label class="switch"><input type="checkbox" id="chkWire"><span></span></label></div>
+        <div class="row"><label for="selQuality">画質</label>
+          <div class="ctl"><select id="selQuality"><option value="auto">自動</option><option value="high">高</option><option value="mid">中</option><option value="low">低</option></select></div></div>
+      </div>
+    </details>
+
+    <details class="sec" open>
+      <summary>オブジェクト</summary>
+      <div class="sec-body">
+        <div class="tree-tools">
+          <input type="search" id="treeFilter" placeholder="名前で絞り込み" aria-label="オブジェクト名で絞り込み">
+          <button class="btn" id="btnShowAll" title="すべて表示">全表示</button>
+        </div>
+        <div class="tree" id="tree"><div class="empty">モデル未読込</div></div>
+      </div>
+    </details>
+  </div>
+</aside>
+
+<div class="hud" id="hud"><span>FPS <b id="hFps">—</b></span><span>△ <b id="hTris">0</b></span></div>
+
+<div class="loading" id="loading" role="status" aria-live="polite"><div class="pct" id="loadPct">0%</div><div class="sub" id="loadSub">読み込み中…</div></div>
+
+<section class="empty-state" id="empty" hidden>
+  <svg class="torii" viewBox="0 0 64 52" aria-hidden="true"><path d="M3 9c18 4 40 4 58 0M8 18h48M15 18v32M49 18v32M11 10l-2 8m46-8 2 8M32 10v8" stroke="currentColor" stroke-width="4" fill="none" stroke-linecap="round"/></svg>
+  <h2>モデルを読み込む</h2>
+  <p>GLB / GLTF ファイルをここにドロップするか、<br>「開く」から選択してください。<br>URL 指定: <code>?model=path/to/file.glb</code></p>
+  <button class="btn primary" id="btnOpen2">ファイルを選択</button>
+</section>
+
+<div class="drop" id="drop">ここに放して読み込む</div>
+<div class="toast" id="toast" role="alert"></div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+const CDN = 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/libs/';
+const $ = (id) => document.getElementById(id);
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('hakoniwa-viewer:' + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem('hakoniwa-viewer:' + k, JSON.stringify(v)); } catch { /* 無視 */ } },
+};
+// テスト用に状態を公開
+const state = window.viewerState = { loaded: false, error: null, tris: 0, objects: 0, name: '' };
+
+/* ---------- レンダラ ---------- */
+const stage = $('stage');
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.autoUpdate = false;   // 静的シーン:必要時のみ影を再計算
+stage.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(40, 1, 0.05, 2000);
+camera.position.set(8, 6, 10);
+
+const pmrem = new THREE.PMREMGenerator(renderer);
+const envTex = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environment = envTex;
+
+const hemi = new THREE.HemisphereLight(0xdfeaf5, 0x8a7a62, 0.35);
+scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xfff1dc, 2.5);
+sun.castShadow = true;
+sun.shadow.bias = -0.0004;
+sun.shadow.normalBias = 0.02;
+scene.add(sun, sun.target);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.screenSpacePanning = true;
+controls.autoRotateSpeed = 1.2;
+controls.maxPolarAngle = Math.PI * 0.98;
+
+/* 地面:影受け+グリッド */
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.ShadowMaterial({ opacity: 0.28 }));
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+ground.renderOrder = -1;
+scene.add(ground);
+let grid = null;
+
+/* 背景 */
+function skyTexture() {
+  const c = document.createElement('canvas'); c.width = 4; c.height = 256;
+  const g = c.getContext('2d'); const gr = g.createLinearGradient(0, 0, 0, 256);
+  gr.addColorStop(0, '#7fa7c9'); gr.addColorStop(0.55, '#c9dbe6'); gr.addColorStop(1, '#efe6d2');
+  g.fillStyle = gr; g.fillRect(0, 0, 4, 256);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+const BG = { sky: skyTexture(), dark: new THREE.Color('#1d1b18'), light: new THREE.Color('#efe9dc') };
+const GRID_COL = { sky: [0x8f8676, 0xb3ab9c], dark: [0x5a5248, 0x3a352e], light: [0xa89f8e, 0xcfc6b4] };
+let bgMode = store.get('bg', 'sky');
+
+/* ---------- ローダ ---------- */
+const manager = new THREE.LoadingManager();
+const draco = new DRACOLoader(manager).setDecoderPath(CDN + 'draco/gltf/');
+const ktx2 = new KTX2Loader(manager).setTranscoderPath(CDN + 'basis/').detectSupport(renderer);
+const loader = new GLTFLoader(manager).setDRACOLoader(draco).setKTX2Loader(ktx2).setMeshoptDecoder(MeshoptDecoder);
+
+let model = null, modelBox = new THREE.Box3(), modelSize = 1, triCount = 0;
+let blobURLs = [];
+
+/* ---------- 画質 / 負荷対策 ---------- */
+let quality = store.get('quality', 'auto');
+let autoScale = 1;            // 自動画質で下げる係数
+function maxDPR() {
+  const dpr = window.devicePixelRatio || 1;
+  if (quality === 'high') return Math.min(dpr, 2);
+  if (quality === 'mid') return Math.min(dpr, 1.25);
+  if (quality === 'low') return 0.75;
+  // auto: 三角形数で上限を決め、さらにFPSで適応
+  const cap = triCount > 1.5e6 ? 1 : triCount > 4e5 ? 1.5 : 2;
+  return Math.max(0.6, Math.min(dpr, cap) * autoScale);
+}
+function shadowMapSize() {
+  if (quality === 'low') return 1024;
+  if (quality === 'high') return 4096;
+  return triCount > 8e5 ? 1024 : 2048;
+}
+function applyQuality() {
+  renderer.setPixelRatio(maxDPR());
+  resize();
+  const s = shadowMapSize();
+  if (sun.shadow.mapSize.x !== s) {
+    sun.shadow.mapSize.set(s, s);
+    if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
+  }
+  invalidate(true);
+}
+
+function resize() {
+  const w = stage.clientWidth, h = stage.clientHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / Math.max(1, h);
+  camera.updateProjectionMatrix();
+  invalidate();
+}
+window.addEventListener('resize', resize);
+
+/* ---------- 描画ループ(オンデマンド) ---------- */
+let needsRender = true;
+function invalidate(shadow = false) { needsRender = true; if (shadow) renderer.shadowMap.needsUpdate = true; }
+controls.addEventListener('change', () => invalidate());
+
+let frames = 0, lastT = performance.now(), slowStreak = 0;
+function loop() {
+  requestAnimationFrame(loop);
+  const moving = controls.update();
+  if (!needsRender && !moving && !controls.autoRotate) return;
+  needsRender = false;
+  renderer.render(scene, camera);
+  frames++;
+}
+setInterval(() => {
+  const now = performance.now(), fps = frames * 1000 / (now - lastT);
+  $('hFps').textContent = frames ? fps.toFixed(0) : '静止';
+  // 自動画質:動かしている最中に遅ければ解像度を下げる/速ければ戻す
+  if (quality === 'auto' && frames > 3) {
+    if (fps < 28) { slowStreak++; if (slowStreak >= 2 && autoScale > 0.5) { autoScale = Math.max(0.5, autoScale - 0.15); applyQuality(); slowStreak = 0; } }
+    else if (fps > 55 && autoScale < 1) { autoScale = Math.min(1, autoScale + 0.1); applyQuality(); slowStreak = 0; }
+    else slowStreak = 0;
+  }
+  frames = 0; lastT = now;
+}, 1000);
+
+/* ---------- カメラ ---------- */
+function frameBox(box, dir) {
+  if (box.isEmpty()) return;
+  const sphere = box.getBoundingSphere(new THREE.Sphere());
+  const r = Math.max(sphere.radius, 0.01);
+  const fov = THREE.MathUtils.degToRad(camera.fov);
+  const fitH = r / Math.sin(fov / 2);
+  const fitW = r / Math.sin(Math.atan(Math.tan(fov / 2) * camera.aspect));
+  const dist = Math.max(fitH, fitW) * 1.08;
+  const d = (dir || camera.position.clone().sub(controls.target)).clone().normalize();
+  if (!isFinite(d.x) || d.lengthSq() === 0) d.set(1, 0.6, 1).normalize();
+  controls.target.copy(sphere.center);
+  camera.position.copy(sphere.center).addScaledVector(d, dist);
+  camera.near = Math.max(dist / 1000, 0.001);
+  camera.far = dist * 20 + r * 10;
+  camera.updateProjectionMatrix();
+  controls.maxDistance = dist * 8;
+  controls.minDistance = r * 0.02;
+  controls.update();
+  invalidate();
+}
+const VIEWS = {
+  front: new THREE.Vector3(0, 0.12, 1), side: new THREE.Vector3(1, 0.12, 0),
+  top: new THREE.Vector3(0, 1, 0.0001), iso: new THREE.Vector3(1, 0.75, 1.1),
+};
+document.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => frameBox(modelBox, VIEWS[b.dataset.view])));
+$('btnFit').addEventListener('click', () => frameBox(modelBox));
+$('btnRotate').addEventListener('click', (e) => {
+  controls.autoRotate = !controls.autoRotate;
+  e.currentTarget.setAttribute('aria-pressed', controls.autoRotate);
+  invalidate();
+});
+
+/* ---------- ライト配置 ---------- */
+let sunAz = store.get('sunAz', 135);
+function placeSun() {
+  const c = modelBox.isEmpty() ? new THREE.Vector3() : modelBox.getCenter(new THREE.Vector3());
+  const r = modelSize * 0.75;
+  const az = THREE.MathUtils.degToRad(sunAz), el = THREE.MathUtils.degToRad(50);
+  sun.position.set(c.x + Math.cos(az) * Math.cos(el) * r * 2, c.y + Math.sin(el) * r * 2, c.z + Math.sin(az) * Math.cos(el) * r * 2);
+  sun.target.position.copy(c);
+  sun.target.updateMatrixWorld();
+  const cam = sun.shadow.camera;
+  cam.left = cam.bottom = -r; cam.right = cam.top = r;
+  cam.near = 0.01; cam.far = r * 5;
+  cam.updateProjectionMatrix();
+  invalidate(true);
+}
+
+function setupGround() {
+  const size = modelBox.isEmpty() ? 10 : modelSize;
+  const y = modelBox.isEmpty() ? 0 : modelBox.min.y;
+  const c = modelBox.isEmpty() ? new THREE.Vector3() : modelBox.getCenter(new THREE.Vector3());
+  const span = size * 3;
+  ground.scale.set(span, span, 1);
+  ground.position.set(c.x, y - size * 0.0005, c.z);
+  if (grid) { scene.remove(grid); grid.geometry.dispose(); grid.material.dispose(); }
+  // 1m 単位を基本に、大きさに合わせて目盛を調整
+  const step = Math.pow(10, Math.floor(Math.log10(Math.max(size, 0.01) / 2)));
+  const div = Math.min(200, Math.round(span / step));
+  const [c1, c2] = GRID_COL[bgMode];
+  grid = new THREE.GridHelper(div * step, div, c1, c2);
+  grid.material.transparent = true; grid.material.opacity = 0.55; grid.material.depthWrite = false;
+  grid.position.set(c.x, y + size * 0.0005, c.z);
+  grid.visible = $('chkGrid').checked;
+  scene.add(grid);
+  invalidate(true);
+}
+
+/* ---------- 描画設定 UI ---------- */
+function setBg(mode) {
+  bgMode = BG[mode] ? mode : 'sky';
+  scene.background = BG[bgMode];
+  document.querySelectorAll('#segBg button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.bg === bgMode));
+  ground.material.opacity = bgMode === 'dark' ? 0.45 : 0.28;
+  store.set('bg', bgMode);
+  setupGround();
+}
+document.querySelectorAll('#segBg button').forEach((b) => b.addEventListener('click', () => setBg(b.dataset.bg)));
+
+const TONES = { aces: THREE.ACESFilmicToneMapping, agx: THREE.AgXToneMapping, neutral: THREE.NeutralToneMapping, none: THREE.NoToneMapping };
+function setTone(v) {
+  renderer.toneMapping = TONES[v] ?? THREE.ACESFilmicToneMapping;
+  scene.traverse((o) => { if (o.material) [].concat(o.material).forEach((m) => (m.needsUpdate = true)); });
+  store.set('tone', v); invalidate();
+}
+$('selTone').addEventListener('change', (e) => setTone(e.target.value));
+
+function bindRange(id, vid, fmt, apply, key) {
+  const el = $(id), saved = store.get(key, null);
+  if (saved !== null) el.value = saved;
+  const up = () => { const v = parseFloat(el.value); $(vid).textContent = fmt(v); apply(v); store.set(key, v); };
+  el.addEventListener('input', up); up();
+}
+bindRange('rngExp', 'vExp', (v) => v.toFixed(2), (v) => { renderer.toneMappingExposure = v; invalidate(); }, 'exp');
+bindRange('rngEnv', 'vEnv', (v) => v.toFixed(2), (v) => { scene.environmentIntensity = v; hemi.intensity = 0.35 * v; invalidate(); }, 'env');
+bindRange('rngSun', 'vSun', (v) => v.toFixed(1), (v) => { sun.intensity = v; invalidate(); }, 'sun');
+bindRange('rngAz', 'vAz', (v) => v + '°', (v) => { sunAz = v; placeSun(); }, 'sunAz');
+
+$('chkShadow').addEventListener('change', (e) => { sun.castShadow = e.target.checked; ground.visible = e.target.checked && $('chkGround').checked; invalidate(true); });
+$('chkGround').addEventListener('change', (e) => { ground.visible = e.target.checked && $('chkShadow').checked; invalidate(); });
+$('chkGrid').addEventListener('change', (e) => { if (grid) grid.visible = e.target.checked; invalidate(); });
+$('chkWire').addEventListener('change', (e) => {
+  if (!model) return;
+  model.traverse((o) => { if (o.isMesh) [].concat(o.material).forEach((m) => { if ('wireframe' in m) m.wireframe = e.target.checked; }); });
+  invalidate();
+});
+$('selQuality').value = quality;
+$('selQuality').addEventListener('change', (e) => { quality = e.target.value; autoScale = 1; store.set('quality', quality); applyQuality(); });
+
+const toneSaved = store.get('tone', 'aces');
+$('selTone').value = TONES[toneSaved] !== undefined ? toneSaved : 'aces';
+setTone($('selTone').value);
+
+/* ---------- テーマ / パネル ---------- */
+const root = document.documentElement;
+const savedTheme = store.get('theme', null);
+if (savedTheme) root.dataset.theme = savedTheme;
+$('btnTheme').addEventListener('click', () => {
+  const dark = root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+  root.dataset.theme = dark ? 'light' : 'dark';
+  store.set('theme', root.dataset.theme);
+});
+const panel = $('panel');
+const narrow = matchMedia('(max-width: 640px)').matches;
+setPanel(narrow ? false : store.get('panel', true));   // スマホでは最初は閉じておく
+function setPanel(open) {
+  panel.classList.toggle('collapsed', !open);
+  $('btnPanel').setAttribute('aria-expanded', open);
+  store.set('panel', open);
+}
+$('btnPanel').addEventListener('click', () => setPanel(panel.classList.contains('collapsed')));
+
+/* ---------- 通知 ---------- */
+let toastTimer;
+function toast(msg, err = false) {
+  const t = $('toast'); t.textContent = msg; t.classList.toggle('err', err); t.classList.add('on');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), err ? 5000 : 2200);
+}
+function setProgress(p, sub) {
+  const on = p !== null;
+  $('progress').classList.toggle('on', on);
+  $('loading').classList.toggle('on', on);
+  if (!on) return;
+  const pct = p < 0 ? '…' : Math.round(p * 100) + '%';
+  $('progress').firstElementChild.style.width = (p < 0 ? 30 : p * 100) + '%';
+  $('loadPct').textContent = pct;
+  $('loadSub').textContent = sub || '読み込み中…';
+}
+const fmtBytes = (b) => b > 1048576 ? (b / 1048576).toFixed(1) + ' MB' : (b / 1024).toFixed(0) + ' KB';
+const fmtNum = (n) => n.toLocaleString('ja-JP');
+
+/* ---------- 読み込み ---------- */
+function disposeModel() {
+  if (!model) return;
+  scene.remove(model);
+  model.traverse((o) => {
+    if (o.geometry) o.geometry.dispose();
+    if (o.material) [].concat(o.material).forEach((m) => {
+      for (const k in m) if (m[k] && m[k].isTexture) m[k].dispose();
+      m.dispose();
+    });
+  });
+  model = null;
+  blobURLs.forEach((u) => URL.revokeObjectURL(u)); blobURLs = [];
+  manager.setURLModifier(undefined);
+}
+
+function onLoaded(gltf, name, bytes, t0) {
+  disposeModel();
+  const root3d = gltf.scene || gltf.scenes?.[0];
+  if (!root3d) throw new Error('シーンが含まれていません');
+  model = root3d;
+  let tris = 0, meshes = 0, nodes = 0;
+  const wire = $('chkWire').checked;
+  model.traverse((o) => {
+    nodes++;
+    if (o.isMesh) {
+      meshes++;
+      o.castShadow = true; o.receiveShadow = true;
+      const g = o.geometry, n = g.index ? g.index.count : g.attributes.position.count;
+      const mult = o.isInstancedMesh ? o.count : 1;
+      tris += (n / 3) * mult;
+      [].concat(o.material).forEach((m) => {
+        if (m.map) m.map.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+        if (wire && 'wireframe' in m) m.wireframe = true;
+      });
+    }
+  });
+  scene.add(model);
+  model.updateMatrixWorld(true);
+  // 静的モデル:行列の自動更新を止めて CPU 負荷を下げる
+  model.traverse((o) => { o.matrixAutoUpdate = false; });
+  triCount = Math.round(tris);
+  modelBox = new THREE.Box3().setFromObject(model, true);
+  const size = modelBox.getSize(new THREE.Vector3());
+  modelSize = Math.max(size.x, size.y, size.z, 0.01);
+
+  autoScale = 1;
+  applyQuality();
+  setupGround();
+  placeSun();
+  frameBox(modelBox, VIEWS.iso);
+  buildTree(model);
+
+  const dt = ((performance.now() - t0) / 1000).toFixed(2);
+  $('iName').textContent = name; $('fnameTop').textContent = name;
+  $('iTris').textContent = fmtNum(triCount);
+  $('hTris').textContent = triCount >= 1e6 ? (triCount / 1e6).toFixed(2) + 'M' : triCount >= 1e3 ? (triCount / 1e3).toFixed(1) + 'k' : triCount;
+  $('iObjs').textContent = `${fmtNum(meshes)} メッシュ / ${fmtNum(nodes)} ノード`;
+  $('iDims').textContent = `${size.x.toFixed(2)} × ${size.y.toFixed(2)} × ${size.z.toFixed(2)}`;
+  $('iLoad').textContent = (bytes ? fmtBytes(bytes) + ' / ' : '') + dt + ' 秒';
+  $('empty').hidden = true;
+  document.title = name + ' — 箱庭ビューア';
+  Object.assign(state, { loaded: true, error: null, tris: triCount, objects: meshes, nodes, name, size: size.toArray() });
+  setProgress(null);
+  invalidate(true);
+}
+
+function onError(err, name) {
+  console.warn('読込失敗:', err);
+  setProgress(null);
+  state.error = String(err && err.message || err);
+  toast(`読み込めませんでした: ${name}(${state.error})`, true);
+  if (!model) $('empty').hidden = false;
+}
+
+function loadURL(url, name, quiet = false) {
+  const t0 = performance.now();
+  name = name || decodeURIComponent(url.split('/').pop().split('?')[0]);
+  state.loaded = false;
+  setProgress(-1, name);
+  let total = 0;
+  return new Promise((resolve) => {
+    loader.load(url,
+      (gltf) => { try { onLoaded(gltf, name, total, t0); } catch (e) { onError(e, name); } resolve(true); },
+      (ev) => { if (ev.lengthComputable && ev.total) { total = ev.total; setProgress(ev.loaded / ev.total, `${name} — ${fmtBytes(ev.loaded)} / ${fmtBytes(ev.total)}`); } else if (ev.loaded) setProgress(-1, `${name} — ${fmtBytes(ev.loaded)}`); },
+      (err) => { if (quiet) { setProgress(null); resolve(false); } else { onError(err, name); resolve(false); } });
+  });
+}
+
+/* 複数ファイル(.gltf + .bin + テクスチャ)にも対応 */
+function loadFiles(fileList) {
+  const files = Array.from(fileList || []);
+  const main = files.find((f) => /\.glb$/i.test(f.name)) || files.find((f) => /\.gltf$/i.test(f.name));
+  if (!main) { toast('GLB / GLTF ファイルを選んでください', true); return; }
+  const t0 = performance.now();
+  setProgress(0, main.name);
+  const reader = new FileReader();
+  reader.onprogress = (e) => e.lengthComputable && setProgress(e.loaded / e.total * 0.5, `${main.name} — ${fmtBytes(e.loaded)}`);
+  reader.onerror = () => onError(reader.error, main.name);
+  reader.onload = () => {
+    setProgress(0.6, `${main.name} — 解析中…`);
+    // 付随ファイルを blob URL に差し替え
+    const map = new Map();
+    files.forEach((f) => { if (f !== main) { const u = URL.createObjectURL(f); map.set(f.name, u); } });
+    const pending = [...map.values()];
+    manager.setURLModifier((url) => {
+      const key = decodeURIComponent(url.split('/').pop().split('?')[0]);
+      return map.get(key) || url;
+    });
+    setTimeout(() => {   // 進捗表示を先に描かせる
+      loader.parse(reader.result, '', (gltf) => {
+        try { onLoaded(gltf, main.name, main.size, t0); blobURLs = pending; } catch (e) { onError(e, main.name); }
+      }, (err) => onError(err, main.name));
+    }, 30);
+  };
+  reader.readAsArrayBuffer(main);
+}
+
+$('btnOpen').addEventListener('click', () => $('fileInput').click());
+$('btnOpen2').addEventListener('click', () => $('fileInput').click());
+$('fileInput').addEventListener('change', (e) => { loadFiles(e.target.files); e.target.value = ''; });
+
+let dragDepth = 0;
+window.addEventListener('dragenter', (e) => { if (e.dataTransfer?.types?.includes('Files')) { e.preventDefault(); dragDepth++; $('drop').classList.add('on'); } });
+window.addEventListener('dragover', (e) => e.preventDefault());
+window.addEventListener('dragleave', () => { if (--dragDepth <= 0) { dragDepth = 0; $('drop').classList.remove('on'); } });
+window.addEventListener('drop', (e) => { e.preventDefault(); dragDepth = 0; $('drop').classList.remove('on'); loadFiles(e.dataTransfer.files); });
+
+/* ---------- オブジェクトツリー(遅延展開) ---------- */
+const treeEl = $('tree');
+function label(o) {
+  if (o.name) return o.name;
+  return (o.isMesh ? 'Mesh' : o.isGroup ? 'Group' : o.type) + ' #' + o.id;
+}
+function makeNode(o) {
+  const li = document.createElement('li');
+  const row = document.createElement('div');
+  row.className = 'tnode' + (o.visible ? '' : ' off');
+  const kids = o.children;
+  const tog = document.createElement('button');
+  tog.className = 'tog' + (kids.length ? '' : ' leaf');
+  tog.textContent = '▶';
+  tog.setAttribute('aria-label', '展開');
+  const cb = document.createElement('input');
+  cb.type = 'checkbox'; cb.checked = o.visible; cb.setAttribute('aria-label', label(o) + ' の表示');
+  const nm = document.createElement('span');
+  nm.className = 'nm' + (o.isMesh ? ' mesh' : '');
+  nm.textContent = label(o); nm.title = label(o) + '(クリックで注視)';
+  row.append(tog, cb, nm); li.append(row);
+  li._obj = o;
+  cb.addEventListener('change', () => { o.visible = cb.checked; row.classList.toggle('off', !cb.checked); invalidate(true); });
+  nm.addEventListener('click', () => {
+    const b = new THREE.Box3().setFromObject(o, true);
+    if (!b.isEmpty()) frameBox(b);
+  });
+  let built = false, ul = null;
+  tog.addEventListener('click', () => {
+    if (!kids.length) return;
+    if (!built) {
+      ul = document.createElement('ul');
+      const LIMIT = 500;
+      kids.slice(0, LIMIT).forEach((c) => ul.append(makeNode(c).li));
+      if (kids.length > LIMIT) { const more = document.createElement('li'); more.className = 'empty'; more.textContent = `… 他 ${kids.length - LIMIT} 件`; ul.append(more); }
+      li.append(ul); built = true;
+    } else ul.hidden = !ul.hidden;
+    const open = !ul.hidden;
+    tog.textContent = open ? '▼' : '▶';
+    tog.setAttribute('aria-label', open ? '折りたたむ' : '展開');
+  });
+  return { li, tog };
+}
+function buildTree(root3d) {
+  treeEl.innerHTML = '';
+  const ul = document.createElement('ul');
+  // ルートが名前なしの単一グループなら1段飛ばす
+  let tops = [root3d];
+  if (!root3d.name || root3d.name === 'Scene' || root3d.name === 'AuxScene') tops = root3d.children;
+  tops.forEach((o) => {
+    const { li, tog } = makeNode(o);
+    ul.append(li);
+    if (tops.length <= 3) tog.click();   // 上位を自動展開
+  });
+  treeEl.append(ul);
+  if (!tops.length) treeEl.innerHTML = '<div class="empty">オブジェクトなし</div>';
+  $('treeFilter').value = '';
+}
+$('treeFilter').addEventListener('input', (e) => {
+  const q = e.target.value.trim().toLowerCase();
+  if (!model) return;
+  if (!q) { buildTree(model); return; }
+  treeEl.innerHTML = '';
+  const ul = document.createElement('ul');
+  let n = 0;
+  model.traverse((o) => {
+    if (n >= 300 || o === model) return;
+    if (label(o).toLowerCase().includes(q)) { const { li, tog } = makeNode(o); tog.classList.add('leaf'); ul.append(li); n++; }
+  });
+  treeEl.append(ul);
+  if (!n) treeEl.innerHTML = '<div class="empty">該当なし</div>';
+});
+$('btnShowAll').addEventListener('click', () => {
+  if (!model) return;
+  model.traverse((o) => (o.visible = true));
+  treeEl.querySelectorAll('.tnode').forEach((r) => { r.classList.remove('off'); r.querySelector('input').checked = true; });
+  invalidate(true);
+});
+
+/* ---------- スクリーンショット ---------- */
+$('btnShot').addEventListener('click', () => {
+  renderer.render(scene, camera);   // 同フレーム内で読み出す(preserveDrawingBuffer 不要)
+  renderer.domElement.toBlob((blob) => {
+    if (!blob) { toast('保存に失敗しました', true); return; }
+    const a = document.createElement('a');
+    const base = (state.name || 'view').replace(/\.(glb|gltf)$/i, '');
+    const ts = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '');
+    a.href = URL.createObjectURL(blob); a.download = `${base}_${ts}.png`;
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    toast('PNG を保存しました');
+  }, 'image/png');
+});
+
+/* ---------- 起動 ---------- */
+setBg(bgMode);
+applyQuality();
+placeSun();
+frameBox(new THREE.Box3(new THREE.Vector3(-5, 0, -5), new THREE.Vector3(5, 3, 5)), VIEWS.iso);
+loop();
+
+(async () => {
+  const q = new URLSearchParams(location.search).get('model');
+  if (q) { await loadURL(q); return; }
+  // 同階層の haiden_web.glb → リポジトリ構成の ../out/haiden_web.glb の順に探す
+  for (const u of ['haiden_web.glb', '../out/haiden_web.glb']) {
+    try {
+      const r = await fetch(u, { method: 'HEAD', cache: 'no-store' });
+      if (r.ok && !/text\/html/i.test(r.headers.get('content-type') || '')) { if (await loadURL(u, 'haiden_web.glb', true)) return; }
+    } catch { /* 無ければ次へ */ }
+  }
+  $('empty').hidden = false;
+})();
+</script>
+</body>
+</html>

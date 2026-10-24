@@ -1,0 +1,4 @@
+haiden/out/
+node_modules/
+__pycache__/
+*.blend1

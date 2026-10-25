@@ -51,7 +51,9 @@ def build(c, emit):
     t_maru = KW.maru_tpl(**MK).done()
     t_nhira = KW.noki_hira_tpl(HK).done()
     t_nmaru = KW.noki_maru_tpl(MK).done()
-    t_kake = KW.kake_tpl().done()
+    # ver2 (hafu_detail): 掛瓦 moved out over the 登り裏甲 step with a shorter 垂れ
+    ks = float(KP.get("kake_shift", 0.0))
+    t_kake = (KW.kake_tpl(drop=KP["kake_drop"]) if "kake_drop" in KP else KW.kake_tpl()).done()
     tile_top = MK["w0"] + MK["Ro"]           # maru crown above the base surface
     rb = tile_top - 0.03                     # ridge base level above the surface
     info["template_tris"] = {t.name: int(t.ntris) for t in (t_hira, t_maru, t_nhira, t_nmaru, t_kake)}
@@ -274,8 +276,8 @@ def build(c, emit):
             col = make_col("x", xs_, sy * (Ye - dg), sy * 0.0, zm)
             lay(col, "maru", False)
             counts["sode_maru_cols"] = counts.get("sode_maru_cols", 0) + 1
-            yy = np.linspace(sy * (Ye - dg + 0.02), 0.0, 40)
-            xe = np.full_like(yy, sx * (Xg + ho + 0.05))
+            yy = np.linspace(sy * (Ye - dg + KP.get("kake_ext", 0.02)), 0.0, 40)
+            xe = np.full_like(yy, sx * (Xg + ho + 0.05 + ks))
             kake_run(np.stack([xe, yy, zm(np.full_like(yy, sx * (Xg + ho)), yy)], 1), np.array([sx, 0, 0.0]))
 
     # ---- kohai 袖 + 掛瓦 on its side bargeboards
@@ -283,7 +285,7 @@ def build(c, emit):
         col = make_col("x", sx * (Wk - sode_off), yke - proj, y_j, zfront)
         lay(col, "maru", True); count_eave(True, "maru")
         yy = np.linspace(yke - 0.02, -Ye + 0.15, 40)
-        kake_run(np.stack([np.full_like(yy, sx * (Wk + 0.065)), yy, zk(np.full_like(yy, sx * Wk), yy)], 1),
+        kake_run(np.stack([np.full_like(yy, sx * (Wk + 0.065 + ks)), yy, zk(np.full_like(yy, sx * Wk), yy)], 1),
                  np.array([sx, 0, 0.0]), z_off=0.03)
 
     # ---- 瓦座 strip along the main eaves (wood board fronting the base slab)
@@ -434,6 +436,7 @@ def build_chidori(c, ch, CH, KP, MB, ridge_parts, counts, zm, make_col, lay, kak
     R = c.R
     w = ch.w
     zc = ch.zc
+    ks = float(KP.get("kake_shift", 0.0))
     zcf = lambda x, y: zc(x)
     g2 = KP.get("valley_gap", 0.05)
 
@@ -479,7 +482,7 @@ def build_chidori(c, ch, CH, KP, MB, ridge_parts, counts, zm, make_col, lay, kak
         col = make_col("y", ch.yh + sode_off, sx * (w + proj), 0.0, zcf)
         lay(col, "maru", True)
         xx = np.linspace(sx * (w + 0.06), 0.0, 40)
-        kake_run(np.stack([xx, np.full_like(xx, ch.yh - 0.05), zc(xx)], 1), np.array([0, -1.0, 0]))
+        kake_run(np.stack([xx, np.full_like(xx, ch.yh - 0.05 - ks), zc(xx)], 1), np.array([0, -1.0, 0]))
 
     # valley boards (谷板): strip following max(main, chidori) across the crease
     for sx in (-1, 1):
@@ -518,15 +521,28 @@ def build_chidori(c, ch, CH, KP, MB, ridge_parts, counts, zm, make_col, lay, kak
     xh = np.linspace(-w - 0.06, w + 0.06, 121)
     ztop = zc(xh) + 0.035
     hh = hh1 + (hh0 - hh1) * (1 - np.abs(xh) / (w + 0.06)) ** 0.6
-    for half in (xh <= 0, xh >= 0):
-        x_ = xh[half]
-        pts = np.stack([x_, np.full_like(x_, ch.yh - ht / 2 + 0.01), ztop[half] - hh[half] / 2], 1)
-        sc = np.stack([np.ones_like(x_), hh[half]], 1)
-        V, F = G.sweep(pts, G.rect_profile(ht, 1.0, 0.0), mode="vertical", scale=sc)
-        MB["ch_hafu"].add(V, F)
-        pts2 = np.stack([x_, np.full_like(x_, ch.yh - ht / 2 + 0.008), ztop[half] - 0.012], 1)
-        V, F = G.sweep(pts2, G.rect_profile(ht + 0.006, 0.026), mode="vertical")
-        MB["ch_gold"].add(V, F)
+    HD = getattr(c, "HD", None)
+    if HD:
+        # ver2: profiled board halves (眉・段・拝み・破風尻) + 拝み金具/破風尻金具/六葉
+        from hlib import hafu as HF
+        we = w + 0.06
+        for sx in (-1, 1):
+            bd = HF.Board((0, ch.yh + 0.01, 0), (sx, 0, 0), (0, -1.0, 0), 0.0, we,
+                          lambda a, _sx=sx: zc(_sx * np.asarray(a, float)) + 0.035,
+                          lambda a: hh1 + (hh0 - hh1) * np.clip(1 - np.asarray(a, float) / we, 0, 1) ** 0.6,
+                          HF.cfg_of(HD, t=ht), end0="ogami", end1="jiri")
+            MB["ch_hafu"].addt(bd.mesh())
+            bd.kanagu_std(MB["ch_gold"])
+    else:
+        for half in (xh <= 0, xh >= 0):
+            x_ = xh[half]
+            pts = np.stack([x_, np.full_like(x_, ch.yh - ht / 2 + 0.01), ztop[half] - hh[half] / 2], 1)
+            sc = np.stack([np.ones_like(x_), hh[half]], 1)
+            V, F = G.sweep(pts, G.rect_profile(ht, 1.0, 0.0), mode="vertical", scale=sc)
+            MB["ch_hafu"].add(V, F)
+            pts2 = np.stack([x_, np.full_like(x_, ch.yh - ht / 2 + 0.008), ztop[half] - 0.012], 1)
+            V, F = G.sweep(pts2, G.rect_profile(ht + 0.006, 0.026), mode="vertical")
+            MB["ch_gold"].add(V, F)
     # 懸魚 at the apex (猪目懸魚) + 六葉
     Wg, Hg = CH["gegyo_W"], CH["gegyo_H"]
     org = np.array([0.0, ch.yh - ht - 0.02, ch.Zapex + 0.035 - hh0 + 0.06])

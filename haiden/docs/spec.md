@@ -26,7 +26,7 @@ Kidan_Platform, Soseki_Base, Kamebara, Hashira_Pillar, Nageshi_Ji/Uchi, Kashiran
 
 ---
 
-# 拝殿A-2(本瓦葺 + 千鳥破風)
+# 拝殿A-2(本瓦葺 + 千鳥破風)※ ver1 = 現 ID A-2v1。ver2 は末尾の節
 
 - 生成: `python3 haiden/blender/build_haiden.py --variant A-2 --out haiden/out/A-2`(A-1 は `--variant A-1 --out haiden/out/A-1`)
 - 定義: `haiden/blender/variants/A-2.json`(params.json への差分上書き)。屋根組立は `haiden/blender/roof_hongawara.py`、瓦テンプレート・棟・鬼は `haiden/blender/hlib/kawara.py`
@@ -69,3 +69,42 @@ Kidan_Platform, Soseki_Base, Kamebara, Hashira_Pillar, Nageshi_Ji/Uchi, Kashiran
 - 瓦はテンプレート(平瓦52 tris・丸瓦140・軒平約770・軒丸約1000・掛瓦144)を numpy でスタンプして種類ごとに1オブジェクト(配列化)
 - GLB 書き出しは実体化メッシュ。Draco(edgebreaker、位置14bit・法線10bit・UV12bit 量子化)で ~4MB。
   EXT_mesh_gpu_instancing は、隅・谷で瓦を個別に斜めカットしているため同一メッシュの再利用率が低く、Draco後のサイズも十分小さいので不採用
+
+---
+
+# 拝殿A-2 ver2(破風板の作り込み + 仕上げ3種)
+
+- 生成: `python3 haiden/blender/build_haiden.py --variant A-2 --out haiden/out/A-2`。定義 `variants/A-2.json`(A-2v1 と同じ params + 下記フラグ)
+- 形状は A-2 ver1 と同じ(屋根・軸部・千鳥破風)。変更は破風まわり・UV・材質・GLB のみ
+
+## 破風板(`hlib/hafu.py`, params `hafu_detail`)
+板は鉛直面内の部材。断面(板の勾配に直交)を各位置で鉛直スライスに引き伸ばし(1/cosθ)、成を一定に保ちつつ拝み・破風尻を鉛直切りにする。
+
+| 部位 | 寸法・仕様 |
+|---|---|
+| 断面(上から) | 登り裏甲 成0.045・出0.045(掛瓦の垂れの下)/ 登り茅負 成0.055・出0.036→0.020(斜めの見付)/ 繰形の小段 成0.022・出0.012 / 板の見付 |
+| 眉 | 下縁から0.048 の帯を0.010 彫り下げ(眉欠き)、その上に V 溝2本(幅0.013・深0.008)。破風尻では繰形に沿って上がり、端の手前で消える。唐破風・向拝側面は両端で消える |
+| 板 | 妻: 厚0.065・成0.36(段込み)/ 千鳥: 厚0.065・成0.34→0.26 / 唐破風: 厚0.07・成0.34 / 向拝側面: 厚0.06・成0.30 |
+| 拝み | 左右の板を頂部で鉛直に突き付け(妻・千鳥)。継目に拝み金具(左右一対の板金具) |
+| 破風尻 | 下端を長0.26で切り上げ(成の42%)、端に鼻を残す繰形。破風尻金具 + 木口金具(端面を覆う薄板) |
+| 破風金具 | 厚0.004 の板金具: 内側の縁を雲形(2山+尖り)に、猪目の透かし、唐草の打ち出し(渦巻2つ+茎、φ7mm の管)、鋲(半球 r0.0065)を上下に並べる。眉の帯の上で止める(浮き防止)。板の途中に六葉 r0.042 を約0.85m 間隔 |
+| 唐破風 | 板は x=±(向拝半幅+0.02) で両端に端金具、中央(兎毛通の背後)に中央金具、間に六葉。兎毛通に鰭(左右) |
+| 掛瓦 | 段の外へ 0.048 移動(`kawara.kake_shift`)、垂れ 0.11→0.07(`kake_drop`)、妻の掛瓦を破風尻まで延長(`kake_ext` 0.07) |
+
+## UV(`geom.grain_uv`, `render.uv_mode = "grain"`)
+- メッシュの連結部分(=部材)ごとに主成分軸(長手 g)を求め、側面は u=g 方向(木目が部材の長手に沿う)、v=面内のもう一方の主軸、木口面は(e2, e3)。部材ごとにランダムオフセット。1 UV = 2 m
+- A-1 / A-2v1 は従来の triplanar のまま
+
+## 材質と仕上げ(`hlib/materials2.py`)
+| 仕上げ | 主な材質 | 表現 |
+|---|---|---|
+| 丹塗 nuri | `Nuri_Shu_Vermilion`(+木部は Kiji_Hinoki_Wood/Kiji_Old_Wood、垂木木口 Ki_Ochre、格子・妻壁 黒漆) | 長手方向の刷毛ムラ、退色(朱→淡い朱)の斑、塗膜の擦れで下地(焦茶)が覗く斑点。レンダのみ角の擦れ(Bevel ノードで稜線を検出) |
+| 白木 shiraki | `Shiraki_Hinoki` | 淡い黄白の檜、細い年輪(柾目)+板目の淡い模様、節は稀。格子・妻壁も白木 |
+| 古色 koshoku | `Koshoku_Kiji` / `Koshoku_Kiji_Dark`(床・格子・妻壁)、金具 `Kanagu_Koshoku` | 焦茶〜灰褐色、晩材の浮き(強い凹凸)、長手方向の雨筋 |
+| 共通 | 胡粉・漆喰・瓦・銅・石・青銅・布・紙・扁額(黒漆) | — |
+
+- 対応表: `FINISH_MAP`(材質単位)+ `OBJ_MAP`(オブジェクト単位)。各オブジェクトの custom prop `finish_mats` に {仕上げ: 材質} を保存、`render.py` が `apply_finish()` で切替
+- テクスチャ: 11 材質(丹塗・白木・古色×2・木地2・胡粉・漆喰・瓦・銅・石)を 1024px でベイク(baseColor sRGB / normal タンジェント空間 OpenGL / metallicRoughness G=粗さ B=金属)。2m タイル(REPEAT)
+- GLB: Blender 出力時に KHR_materials_variants(variants: nuri, shiraki, koshoku。既定=丹塗)。その後 gltf-transform で WebP(EXT_texture_webp, q82)+ Draco。three.js r170 の GLTFLoader で読込・`parser.getDependency('material', i)` による切替を確認
+- stats.json: `"finishes"`, `"finish_mode": "khr_variants"`, `"uv_mode"`, `"texture_size"`, `"textured_materials"`
+- ビューアでの切替: `gltf.parser.json.extensions.KHR_materials_variants.variants` の名前 → 各メッシュの `userData.gltfExtensions.KHR_materials_variants.mappings` から該当 material を `parser.getDependency('material', idx)` で読み込み差し替える(three.js 例 webgl_loader_gltf_variants と同じ方式)

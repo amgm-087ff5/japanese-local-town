@@ -19,14 +19,15 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # One job per model variant, in parallel (A-1 ≈ 15 min, A-2 ≈ 25 min with final renders).
+  # One job per model variant, in parallel (A-1 ≈ 15 min, A-2v1 ≈ 25 min, A-2 ver2 ≈ 35 min with
+  # texture bake + 6 final renders). A-1 / A-2v1 are frozen (ver1); A-2 = 拝殿A-2 ver2 (3 finishes).
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        variant: [A-1, A-2]
+        variant: [A-1, A-2v1, A-2]
     steps:
       - uses: actions/checkout@v4
 
@@ -60,7 +61,7 @@ jobs:
         with:
           name: haiden-out-${{ matrix.variant }}
           path: |
-            haiden/out/${{ matrix.variant }}/haiden_web.glb
+            haiden/out/${{ matrix.variant }}/haiden_web*.glb
             haiden/out/${{ matrix.variant }}/stats.json
             haiden/out/${{ matrix.variant }}/renders/
           if-no-files-found: error
@@ -97,19 +98,27 @@ jobs:
           for d in dl/haiden-out-*; do
             id="${d#dl/haiden-out-}"
             mkdir -p "_site/models/$id" "_site/renders/$id"
-            cp "$d/haiden_web.glb" "_site/models/$id/haiden_web.glb"
+            cp "$d"/haiden_web*.glb "_site/models/$id/"
             cp "$d/stats.json" "_site/models/$id/stats.json"
             if compgen -G "$d/renders/*.png" > /dev/null; then cp "$d"/renders/*.png "_site/renders/$id/"; fi
           done
           # models/index.json (newest first) + backward-compatible latest copies
           python3 - <<'PY'
           import json, os, re
-          ids = sorted(os.listdir("_site/models"), key=lambda s: [int(x) if x.isdigit() else x for x in re.split(r"(\d+)", s)], reverse=True)
-          ids = [i for i in ids if os.path.isfile(f"_site/models/{i}/haiden_web.glb")]
+          ids = [i for i in os.listdir("_site/models") if os.path.isfile(f"_site/models/{i}/haiden_web.glb")]
+          st_of = {i: json.load(open(f"_site/models/{i}/stats.json", encoding="utf-8")) for i in ids}
+          # newest first: stats "seq" (A-2 ver2 = 3, A-2v1 = 2, A-1 = 1), then natural id order
+          nat = lambda s: [int(x) if x.isdigit() else x for x in re.split(r"(\d+)", s)]
+          ids = sorted(ids, key=lambda i: (st_of[i].get("seq", 0), nat(i)), reverse=True)
           idx = []
           for i in ids:
-              st = json.load(open(f"_site/models/{i}/stats.json", encoding="utf-8"))
-              idx.append({"id": i, "name": st.get("name", i), "glb": f"models/{i}/haiden_web.glb", "stats": f"models/{i}/stats.json"})
+              st = st_of[i]
+              e = {"id": i, "name": st.get("name", i), "glb": f"models/{i}/haiden_web.glb", "stats": f"models/{i}/stats.json"}
+              e["finishes"] = st.get("finishes", [{"id": "nuri", "name": "丹塗"}])
+              e["finish_mode"] = st.get("finish_mode", "single")
+              if st.get("finish_mode") == "separate":
+                  e["finish_glbs"] = {k: f"models/{i}/{os.path.basename(v)}" for k, v in st.get("finish_glbs", {}).items()}
+              idx.append(e)
           json.dump(idx, open("_site/models/index.json", "w", encoding="utf-8"), ensure_ascii=False, indent=2)
           print(json.dumps(idx, ensure_ascii=False, indent=2))
           latest = ids[0]

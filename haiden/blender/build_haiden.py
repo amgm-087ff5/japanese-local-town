@@ -41,6 +41,7 @@ FONT = "/usr/share/fonts/opentype/noto/NotoSerifCJK-Bold.ttc"
 P = None
 M = None
 ROOT = None
+UV_MODE = "triplanar"      # ver2: "grain" (UV along each member's long axis)
 OBJ_COUNTER = {}
 
 
@@ -55,7 +56,7 @@ def coll(name):
 def emit(name, mb, mat, cname, smooth=32.0):
     if mb is None or mb.empty():
         return None
-    me = mb.to_mesh(name)
+    me = mb.to_mesh(name) if UV_MODE == "triplanar" else mb.to_mesh(name, uv_mode=UV_MODE)
     me.materials.append(M[mat])
     if smooth:
         me.shade_smooth()
@@ -257,6 +258,10 @@ def build(p):
     X0, Y0 = fr.X0, fr.Y0
     pr = p["pillar_d"] / 2
     info = {}
+    HD = p.get("hafu_detail") or {}
+    HD = HD if HD.get("enabled") else None
+    if HD:
+        from hlib import hafu as HF
 
     # ---------------------------------------------------------------- heights
     z_kidan = p["kidan_h"]
@@ -825,18 +830,30 @@ def build(p):
     hf = G.MB(); gb = G.MB(); kg = G.MB(); tb = G.MB(); gk = G.MB(); hk = G.MB()
     for sx in (-1, 1):
         xh = sx * (Xg + ho + R["hafu_t"] / 2 - 0.01)
-        yy = np.linspace(-(Ye - dg) - 0.05, (Ye - dg) + 0.05, 61)
-        dd = Ye - np.abs(yy)
-        ztop = RF.z(np.full_like(yy, sx * (Xg + ho)), yy, dd, True) + 0.035
-        # 拝み (apex) slight cusp
-        zc_ = ztop - R["hafu_h"] / 2
-        pts = np.stack([np.full_like(yy, xh), yy, zc_], 1)
-        V, F = G.sweep(pts, G.rect_profile(R["hafu_t"], R["hafu_h"], 0.01), mode="vertical")
-        hf.add(V, F)
-        # gold edge strip on hafu
-        pts2 = pts.copy(); pts2[:, 2] = ztop - 0.012; pts2[:, 0] += sx * 0.002
-        V, F = G.sweep(pts2, G.rect_profile(R["hafu_t"] + 0.006, 0.026), mode="vertical")
-        hk.add(V, F)
+        if HD:
+            # ver2: profiled board halves (眉・登り裏甲/茅負の段・拝み・破風尻繰形) + 破風金具
+            for sy in (-1, 1):
+                def ztf(a, _sx=sx, _sy=sy):
+                    y = _sy * np.asarray(a, float)
+                    return RF.z(np.full_like(y, _sx * (Xg + ho)), y, Ye - np.abs(y), True) + 0.035
+                bd = HF.Board((sx * (Xg + ho - 0.01), 0, 0), (0, sy, 0), (sx, 0, 0), 0.0, (Ye - dg) + 0.05, ztf,
+                              lambda a: np.full_like(np.asarray(a, float), R["hafu_h"]),
+                              HF.cfg_of(HD, t=R["hafu_t"]), end0="ogami", end1="jiri")
+                hf.addt(bd.mesh())
+                bd.kanagu_std(hk)
+        else:
+            yy = np.linspace(-(Ye - dg) - 0.05, (Ye - dg) + 0.05, 61)
+            dd = Ye - np.abs(yy)
+            ztop = RF.z(np.full_like(yy, sx * (Xg + ho)), yy, dd, True) + 0.035
+            # 拝み (apex) slight cusp
+            zc_ = ztop - R["hafu_h"] / 2
+            pts = np.stack([np.full_like(yy, xh), yy, zc_], 1)
+            V, F = G.sweep(pts, G.rect_profile(R["hafu_t"], R["hafu_h"], 0.01), mode="vertical")
+            hf.add(V, F)
+            # gold edge strip on hafu
+            pts2 = pts.copy(); pts2[:, 2] = ztop - 0.012; pts2[:, 0] += sx * 0.002
+            V, F = G.sweep(pts2, G.rect_profile(R["hafu_t"] + 0.006, 0.026), mode="vertical")
+            hk.add(V, F)
         # tsuma wall polygon (board) + kitsuregoshi lattice
         xw = sx * Xg
         zbase = RF.z(Xg, 0.0, dg, False) + 0.03
@@ -1025,28 +1042,62 @@ def build(p):
 
     # karahafu board + side hafu + uketo gegyo
     kb_ = G.MB(); kbg = G.MB(); ug = G.MB()
-    xv = np.linspace(-Wk - 0.02, Wk + 0.02, 120)
-    zt_e = Zk0 + bump(xv) + RF.lip(0) + 0.03
-    pts = np.stack([xv, np.full_like(xv, yke - 0.035), zt_e - 0.16], 1)
-    V, F = G.sweep(pts, G.rect_profile(0.07, 0.32, 0.012), mode="vertical")
-    kb_.add(V, F)
-    pts2 = pts.copy(); pts2[:, 2] = zt_e - 0.012; pts2[:, 1] -= 0.003
-    V, F = G.sweep(pts2, G.rect_profile(0.078, 0.026), mode="vertical")
-    kbg.add(V, F)
-    for sx in (-1, 1):
-        dks = np.linspace(0, abs(yke) - Ye + 0.15, 30)
-        x = np.full_like(dks, sx * (Wk + 0.035))
-        tt = dks / dk_j
-        zz = (2 * tt ** 3 - 3 * tt ** 2 + 1) * Zk0 + (tt ** 3 - 2 * tt ** 2 + tt) * dk_j * m0 + (-2 * tt ** 3 + 3 * tt ** 2) * zj_main(x) + (tt ** 3 - tt ** 2) * dk_j * m1
-        zz = zz + bump(x) * kfade(dks) + 0.03
-        pts = np.stack([x, yke + dks, zz - 0.15], 1)
-        V, F = G.sweep(pts, G.rect_profile(0.06, 0.30, 0.01), mode="vertical")
-        kb_.add(V, F)
     W_, H_ = 0.55, 0.55
-    org = np.array([0, yke - 0.08, Zk0 + kh_h - 0.25])
-    ug.addt(G.extrude_poly(PT.gegyo_outline(W_, H_), 0.05, (org, np.array([1.0, 0, 0]), np.array([0, 0, 1.0])),
-                           holes=[PT.heart(0, -H_ * 0.45, 0.13)]))
-    kbg.addt(PT.rokuyo(org + np.array([0, -0.03, -H_ * 0.15]), (0, -1, 0), r=0.06, seg=24))
+    if HD:
+        # ver2: profiled karahafu board (眉・段・中央/端の金具) + side boards, 兎毛通 with 鰭
+        kcfg = HF.cfg_of(HD, t=0.07)
+        bd = HF.Board((0, yke, 0), (1, 0, 0), (0, -1, 0), -Wk - 0.02, Wk + 0.02,
+                      lambda a: Zk0 + bump(np.asarray(a, float)) + RF.lip(0) + 0.03,
+                      lambda a: np.full_like(np.asarray(a, float), HD.get("karahafu_h", 0.32)), kcfg,
+                      end0="plain", end1="plain", step=0.03)
+        kb_.addt(bd.mesh())
+        c_ = kcfg
+        bd.plate(kbg, 0.0, c_["plate_L"], cusp_lo=False, cusp_hi=True)
+        bd.plate(kbg, bd.S - c_["plate_L"], bd.S, cusp_lo=True, cusp_hi=False)
+        bd.plate(kbg, bd.S / 2 - c_["mid_L"], bd.S / 2 + c_["mid_L"], inome=False)
+        bd.rokuyo_row(kbg, c_["plate_L"] + 0.05, bd.S / 2 - c_["mid_L"] - 0.05)
+        bd.rokuyo_row(kbg, bd.S / 2 + c_["mid_L"] + 0.05, bd.S - c_["plate_L"] - 0.05)
+        for sx in (-1, 1):
+            def zsf(a, _sx=sx):
+                dks = np.asarray(a, float) - yke
+                x = np.full_like(dks, _sx * (Wk + 0.035))
+                tt = dks / dk_j
+                zz = (2 * tt ** 3 - 3 * tt ** 2 + 1) * Zk0 + (tt ** 3 - 2 * tt ** 2 + tt) * dk_j * m0 + (-2 * tt ** 3 + 3 * tt ** 2) * zj_main(x) + (tt ** 3 - tt ** 2) * dk_j * m1
+                return zz + bump(x) * kfade(dks) + 0.03
+            sb = HF.Board((sx * (Wk + 0.005), 0, 0), (0, 1, 0), (sx, 0, 0), yke, yke + abs(yke) - Ye + 0.15, zsf,
+                          lambda a: np.full_like(np.asarray(a, float), 0.30), HF.cfg_of(HD, t=0.06),
+                          end0="plain", end1="plain")
+            kb_.addt(sb.mesh())
+            sb.rokuyo_row(kbg, 0.25, sb.S - 0.35)
+        org = np.array([0, yke - 0.08, Zk0 + kh_h - 0.25])
+        ug.addt(G.extrude_poly(PT.gegyo_outline(W_, H_), 0.05, (org, np.array([1.0, 0, 0]), np.array([0, 0, 1.0])),
+                               holes=[PT.heart(0, -H_ * 0.45, 0.13)]))
+        for sd in (1, -1):
+            ug.addt(G.extrude_poly(PT.gegyo_fin(W_ * 1.15, H_ * 0.9, sd), 0.035,
+                                   (org + np.array([0, 0.012, 0]), np.array([1.0, 0, 0]), np.array([0, 0, 1.0]))))
+        kbg.addt(PT.rokuyo(org + np.array([0, -0.03, -H_ * 0.15]), (0, -1, 0), r=0.06, seg=24))
+    else:
+        xv = np.linspace(-Wk - 0.02, Wk + 0.02, 120)
+        zt_e = Zk0 + bump(xv) + RF.lip(0) + 0.03
+        pts = np.stack([xv, np.full_like(xv, yke - 0.035), zt_e - 0.16], 1)
+        V, F = G.sweep(pts, G.rect_profile(0.07, 0.32, 0.012), mode="vertical")
+        kb_.add(V, F)
+        pts2 = pts.copy(); pts2[:, 2] = zt_e - 0.012; pts2[:, 1] -= 0.003
+        V, F = G.sweep(pts2, G.rect_profile(0.078, 0.026), mode="vertical")
+        kbg.add(V, F)
+        for sx in (-1, 1):
+            dks = np.linspace(0, abs(yke) - Ye + 0.15, 30)
+            x = np.full_like(dks, sx * (Wk + 0.035))
+            tt = dks / dk_j
+            zz = (2 * tt ** 3 - 3 * tt ** 2 + 1) * Zk0 + (tt ** 3 - 2 * tt ** 2 + tt) * dk_j * m0 + (-2 * tt ** 3 + 3 * tt ** 2) * zj_main(x) + (tt ** 3 - tt ** 2) * dk_j * m1
+            zz = zz + bump(x) * kfade(dks) + 0.03
+            pts = np.stack([x, yke + dks, zz - 0.15], 1)
+            V, F = G.sweep(pts, G.rect_profile(0.06, 0.30, 0.01), mode="vertical")
+            kb_.add(V, F)
+        org = np.array([0, yke - 0.08, Zk0 + kh_h - 0.25])
+        ug.addt(G.extrude_poly(PT.gegyo_outline(W_, H_), 0.05, (org, np.array([1.0, 0, 0]), np.array([0, 0, 1.0])),
+                               holes=[PT.heart(0, -H_ * 0.45, 0.13)]))
+        kbg.addt(PT.rokuyo(org + np.array([0, -0.03, -H_ * 0.15]), (0, -1, 0), r=0.06, seg=24))
     emit("Karahafu_CurvedBargeboard", kb_, "Nuri_Shu_Vermilion", C)
     emit("Karahafu_Kanagu_GoldTrim", kbg, "Kanagu_Gold", C)
     emit("Uketo_Gegyo_Pendant", ug, "Kiji_Hinoki_Wood", C)
@@ -1363,6 +1414,37 @@ def export_glb(path, draco=False, image_format="AUTO"):
         bpy.ops.export_scene.gltf(**kw)
 
 
+def export_v2(out, RV, M2):
+    """ver2: 1K tiles (base/normal/MR) -> GLB with KHR_materials_variants -> WebP + Draco web GLB."""
+    t0 = time.time()
+    size = int(RV.get("tex_size", 1024))
+    tiles = M2.bake_tiles2(M2.BAKE2, os.path.join(out, "textures"), size=size)
+    print("baked %d materials in %.1fs" % (len(tiles), time.time() - t0), flush=True)
+    nvar = M2.setup_gltf_variants(tiles)
+    full = os.path.join(out, "haiden.glb")
+    export_glb(full, image_format="AUTO")
+    web = os.path.join(out, "haiden_web.glb")
+    gt = find_gltf_transform()
+    res = {"texture_size": size, "textured_materials": sorted(tiles), "variant_meshes": nvar}
+    ok = False
+    if gt:
+        tmp = os.path.join(out, "_web_tmp.glb")
+        r = subprocess.run([gt, "webp", full, tmp, "--quality", str(RV.get("webp_quality", 82))],
+                           capture_output=True, text=True)
+        print(r.stdout[-300:], r.stderr[-300:])
+        if r.returncode == 0:
+            r = subprocess.run([gt, "draco", tmp, web, "--method", "edgebreaker"], capture_output=True, text=True)
+            print(r.stdout[-300:], r.stderr[-300:])
+            ok = r.returncode == 0
+        if os.path.exists(tmp):
+            os.remove(tmp)
+    if not ok:
+        export_glb(web, image_format="JPEG")
+    res.update({"glb_bytes": os.path.getsize(web), "glb_full_bytes": os.path.getsize(full),
+                "web_draco": ok, "web_textures": "webp" if ok else "jpeg"})
+    return res
+
+
 def deep_merge(base, over):
     out = dict(base)
     for k, v in over.items():
@@ -1385,7 +1467,7 @@ def load_variant(vid, params_path):
 
 
 def main():
-    global M, ROOT
+    global M, ROOT, UV_MODE
     ap = argparse.ArgumentParser()
     ap.add_argument("--variant", default="A-1", help="variant id (haiden/blender/variants/<id>.json)")
     ap.add_argument("--out", default=None, help="output dir (default haiden/out/<variant>)")
@@ -1405,10 +1487,19 @@ def main():
     sc.unit_settings.system = "METRIC"
     ROOT = bpy.data.collections.new("Haiden")
     sc.collection.children.link(ROOT)
-    M = Mats()
+    RV = p.get("render") or {}
+    V2 = bool(RV.get("materials_v2"))
+    if V2:
+        from hlib import materials2 as M2
+        M = M2.Mats2()
+        UV_MODE = RV.get("uv_mode", "grain")
+    else:
+        M = Mats()
 
     info = build(p)
     fix_normals()
+    if V2:
+        M2.assign_finishes(M)
     tris, verts, objs, mats = scene_stats()
     mn, mx = bbox_all()
     print("built: %d tris, %d verts, %d objects in %.1fs" % (tris, verts, objs, time.time() - t0))
@@ -1438,7 +1529,17 @@ def main():
                            "finish": p["kawara"].get("material"), "template_tris": kw.get("template_tris")}
         if "chidori" in kw:
             stats["chidori"] = kw["chidori"]
-    if not a.no_glb:
+    stats["seq"] = V.get("seq", 0)
+    if V2:
+        stats["finishes"] = M2.FINISHES
+        stats["finish_mode"] = "khr_variants"
+        stats["uv_mode"] = UV_MODE
+    else:
+        stats["finishes"] = [{"id": "nuri", "name": "丹塗"}]
+        stats["finish_mode"] = "single"
+    if not a.no_glb and V2:
+        stats.update(export_v2(out, RV, M2))
+    elif not a.no_glb:
         tex_dir = os.path.join(out, "textures")
         tiles = bake_tiles(BAKE, tex_dir, size=512)
         for ob in bpy.data.objects:

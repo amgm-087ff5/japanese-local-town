@@ -2,6 +2,7 @@
   "id": "A-1",
   "name": "拝殿A-1 ver1",
   "version": "ver1",
+  "seq": 1,
   "title": "入母屋造・平入・桁行3間×梁間2間・1間向拝(軒唐破風)・銅板段葺・丹塗",
   "frozen_commit": "7b7b936",
   "_note": "params.json をそのまま使う(差分なし)。A-1 ver1 は凍結。",

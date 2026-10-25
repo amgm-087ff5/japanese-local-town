@@ -31,7 +31,7 @@ QUALITY = {
     "final": dict(res=(1600, 900), samples=64, bounces=6),
 }
 # A-2: ~1M tris of glossy tiles + 5 views (A-1: 4) -> slightly fewer samples (OIDN denoised)
-QUALITY_OVERRIDE = {"A-2": {"final": dict(samples=56)}}
+QUALITY_OVERRIDE = {"A-2v1": {"final": dict(samples=56)}, "A-2": {"final": dict(samples=32)}}
 
 DEBUG_VIEWS = {
     "debug_back": ("背面(確認用)", (13.0, 15.0, 9.0), (0.0, 0.0, 4.5), 28, 40, 30, 2.4, 0.45),
@@ -66,7 +66,21 @@ DEBUG_VIEWS_A2 = {
     "dbg_sumi_macro": ("隅マクロ(確認用)", (6.9, -5.9, 5.0), (4.85, -3.65, 5.05), 35, 40, 215, 2.4, 0.45),
     "dbg_kohai_side": ("向拝側面の取合い(確認用)", (5.8, -7.8, 4.8), (1.9, -3.6, 4.7), 30, 40, 215, 2.4, 0.45),
 }
-VIEW_SETS = {"A-1": (VIEWS, DEBUG_VIEWS), "A-2": (VIEWS_A2, DEBUG_VIEWS_A2)}
+# A-2 ver2: finishes (9th field = finish id: nuri 丹塗 / shiraki 白木 / koshoku 古色) + 破風板 close-ups
+VIEWS_A2V2 = {
+    "front_oblique": ("正面斜め(丹塗)", (-9.5, -16.5, 2.6), (0.4, -1.4, 4.0), 30, 38, 215, 2.4, 0.45, "nuri"),
+    "front_oblique_shiraki": ("正面斜め(白木)", (-9.5, -16.5, 2.6), (0.4, -1.4, 4.0), 30, 38, 215, 2.4, 0.45, "shiraki"),
+    "front_oblique_koshoku": ("正面斜め(古色)", (-9.5, -16.5, 2.6), (0.4, -1.4, 4.0), 30, 38, 215, 2.4, 0.45, "koshoku"),
+    "hafu_kohai": ("唐破風・千鳥破風の破風板(丹塗)", (2.75, -7.6, 4.15), (1.25, -4.6, 4.72), 38, 40, 215, 2.4, 0.45, "nuri"),
+    "hafu_kohai_koshoku": ("唐破風・千鳥破風の破風板(古色)", (2.75, -7.6, 4.15), (1.25, -4.6, 4.72), 38, 40, 215, 2.4, 0.45, "koshoku"),
+    "hafu_tsuma_shiraki": ("妻の破風板・拝み(白木)", (6.6, -3.9, 6.0), (3.7, -1.1, 6.15), 36, 40, 215, 2.4, 0.45, "shiraki"),
+}
+DEBUG_VIEWS_A2V2 = dict(DEBUG_VIEWS_A2, **{
+    "dbg_hafu_jiri": ("破風尻マクロ(確認用)", (2.9, -6.4, 3.95), (2.0, -5.3, 4.05), 40, 40, 215, 2.4, 0.45, "nuri"),
+    "dbg_chidori_ogami": ("千鳥破風 拝み(確認用)", (0.9, -5.6, 5.9), (0.0, -2.95, 6.1), 40, 40, 215, 2.4, 0.45, "nuri"),
+    "dbg_tsuma_jiri": ("妻 破風尻(確認用)", (5.4, -3.6, 5.3), (3.7, -2.0, 5.3), 40, 40, 215, 2.4, 0.45, "nuri"),
+})
+VIEW_SETS = {"A-1": (VIEWS, DEBUG_VIEWS), "A-2v1": (VIEWS_A2, DEBUG_VIEWS_A2), "A-2": (VIEWS_A2V2, DEBUG_VIEWS_A2V2)}
 
 
 def link(ob, cname="Env"):
@@ -295,8 +309,14 @@ def main():
     ALL = dict(views, **dbg_views)
     names = [n for n in ALL if (not a.only and n in views) or n in a.only.split(",")]
     timing = {}
+    cur_finish = None
     for n in names:
-        title, loc, tgt, lens, el, az, ss, sk = ALL[n]
+        title, loc, tgt, lens, el, az, ss, sk = ALL[n][:8]
+        fin = ALL[n][8] if len(ALL[n]) > 8 else None
+        if fin and fin != cur_finish:
+            from hlib import materials2 as M2
+            M2.apply_finish(fin)
+            cur_finish = fin
         setup_world(el, az, ss, sk)
         setup_camera(loc, tgt, lens)
         sc.view_settings.exposure = 0.0 if el > 10 else 0.2
@@ -310,7 +330,8 @@ def main():
         print("rendered %s in %.1fs" % (n, timing[n]), flush=True)
     # update stats.json renders list (all pngs present)
     present = [v for v in views if os.path.exists(os.path.join(rdir, v + ".png"))]
-    stats["renders"] = [{"src": "renders/%s/%s.png" % (vid, v), "title": views[v][0]} for v in present]
+    stats["renders"] = [dict({"src": "renders/%s/%s.png" % (vid, v), "title": views[v][0]},
+                             **({"finish": views[v][8]} if len(views[v]) > 8 else {})) for v in present]
     stats["render_quality"] = q
     stats.setdefault("render_seconds", {}).update(timing)
     with open(stats_path, "w", encoding="utf-8") as f:

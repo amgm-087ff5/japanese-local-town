@@ -46,7 +46,7 @@ class MB:
     def empty(self):
         return self.n == 0
 
-    def to_mesh(self, name, uv_tile=2.0):
+    def to_mesh(self, name, uv_tile=2.0, uv_mode="triplanar"):
         V = np.concatenate(self.V) if self.V else np.zeros((0, 3))
         loops, totals = [], []
         for f in self.Fa:
@@ -70,6 +70,10 @@ class MB:
         me.polygons.foreach_set("loop_total", tot.astype(np.int32))
         me.update(calc_edges=True)
         me.validate(clean_customdata=False)
+        if len(tot) and uv_mode == "grain":
+            uv = me.uv_layers.new(name="UVMap")
+            uv.data.foreach_set("uv", grain_uv(V, lv, starts, tot, uv_tile).astype(np.float32).ravel())
+            return me
         # triplanar per-face UV
         if len(tot):
             P = V[lv]
@@ -84,6 +88,55 @@ class MB:
             uv = me.uv_layers.new(name="UVMap")
             uv.data.foreach_set("uv", (np.stack([u, v], 1) / uv_tile).astype(np.float32).ravel())
         return me
+
+
+def grain_uv(V, lv, starts, tot, uv_tile=2.0):
+    """Per-loop UV following each member's long axis (木目方向).
+
+    Each connected part (a member: beam, board, rafter, tile ...) gets a local
+    PCA frame (g = longest axis, e2, e3). Side faces map u along g (the grain
+    runs along the member), v along whichever of e2/e3 lies in the face; end
+    faces (normal ~ g) map (e2, e3) = end grain. A per-part random offset keeps
+    neighbouring members from showing the same stretch of the tile.
+    """
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+    nv = len(V)
+    nxt = np.arange(len(lv)) + 1
+    ends = starts + tot
+    nxt[ends - 1] = starts
+    a_, b_ = lv, lv[nxt]
+    g = coo_matrix((np.ones(len(a_), np.int8), (a_, b_)), shape=(nv, nv))
+    ncomp, lab = connected_components(g, directed=False)
+    cnt = np.bincount(lab, minlength=ncomp).astype(float)
+    cnt[cnt == 0] = 1
+    mu = np.stack([np.bincount(lab, V[:, i], ncomp) for i in range(3)], 1) / cnt[:, None]
+    D = V - mu[lab]
+    C = np.zeros((ncomp, 3, 3))
+    for i in range(3):
+        for j in range(i, 3):
+            C[:, i, j] = C[:, j, i] = np.bincount(lab, D[:, i] * D[:, j], ncomp) / cnt
+    C += np.eye(3)[None] * 1e-12
+    w, E = np.linalg.eigh(C)                     # ascending eigenvalues
+    gax, e2, e3 = E[:, :, 2], E[:, :, 1], E[:, :, 0]
+    fc = lab[lv[starts]]                         # component of each face
+    a = V[lv[starts]]; b = V[lv[starts + 1]]; c = V[lv[starts + np.minimum(2, tot - 1)]]
+    fn = nrm(np.cross(b - a, c - a))
+    dg = np.abs(np.sum(fn * gax[fc], 1))
+    d2 = np.abs(np.sum(fn * e2[fc], 1))
+    d3 = np.abs(np.sum(fn * e3[fc], 1))
+    end = (dg > d2) & (dg > d3)
+    U_ax = np.where(end[:, None], e2[fc], gax[fc])
+    V_ax = np.where(end[:, None], e3[fc], np.where((d3 > d2)[:, None], e2[fc], e3[fc]))
+    lf = np.repeat(np.arange(len(tot)), tot)
+    P = V[lv] - mu[fc[lf]]
+    u = np.sum(P * U_ax[lf], 1)
+    v = np.sum(P * V_ax[lf], 1)
+    rng = np.random.default_rng(1234)
+    off = rng.uniform(0, uv_tile, (ncomp, 2))
+    u = (u + off[fc[lf], 0]) / uv_tile
+    v = (v + off[fc[lf], 1]) / uv_tile
+    return np.stack([u, v], 1)
 
 
 # ---------------------------------------------------------------- primitives

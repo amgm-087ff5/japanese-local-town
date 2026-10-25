@@ -1,16 +1,18 @@
 {
   "id": "A-2",
-  "name": "拝殿A-2 ver1",
-  "version": "ver1",
-  "title": "入母屋造・平入・桁行3間×梁間2間・1間向拝(軒唐破風)・千鳥破風・本瓦葺(いぶし銀)・丹塗",
-  "_note": "params.json(=A-1)との差分。屋根を本瓦葺にし、正面大屋根に千鳥破風を追加。寸法根拠は haiden/docs/research.md §5, spec.md A-2節。kawara.material を Doban_Rokusho_Copper にすると緑青銅瓦(瓦棒風)仕上げ(環境変数 HAIDEN_FINISH=rokusho でも可)。",
+  "name": "拝殿A-2 ver2",
+  "version": "ver2",
+  "seq": 3,
+  "title": "入母屋造・平入・桁行3間×梁間2間・1間向拝(軒唐破風)・千鳥破風・本瓦葺(いぶし銀)・仕上げ3種(丹塗/白木/古色)",
+  "_note": "A-2 ver1(=A-2v1)からの変更: 破風板の作り込み(hafu_detail: 眉・登り裏甲/茅負の段・拝み・破風尻繰形・破風金具)、掛瓦を段の外へ(kake_shift/kake_drop)、木目方向UV(uv_mode=grain)、1Kテクスチャ(base/normal/roughness)、仕上げ3種(finishes, KHR_materials_variants)。根拠は haiden/docs/research.md §6, spec.md A-2 ver2 節。",
   "params": {
     "roof": {
       "type": "hongawara",
       "nokitsuke_t": 0.12,
       "thick": 0.12,
       "step_lip": 0.0,
-      "step_len": 50.0
+      "step_len": 50.0,
+      "hafu_h": 0.36
     },
     "kawara": {
       "material": "Kawara_Ibushi",
@@ -95,7 +97,10 @@
         "layers": 1,
         "w0": 0.26,
         "kan": true
-      }
+      },
+      "kake_shift": 0.048,
+      "kake_drop": 0.07,
+      "kake_ext": 0.07
     },
     "chidori": {
       "enabled": true,
@@ -107,10 +112,33 @@
       "slope_eave": 0.6,
       "slope_ridge": 0.9,
       "slope_pow": 1.4,
-      "hafu_h": 0.3,
-      "hafu_h_end": 0.17,
+      "hafu_h": 0.34,
+      "hafu_h_end": 0.26,
       "gegyo_W": 0.5,
       "gegyo_H": 0.5
-    }
+    },
+    "hafu_detail": {
+      "enabled": true,
+      "karahafu_h": 0.34
+    },
+    "render": {
+      "uv_mode": "grain",
+      "tex_size": 1024,
+      "materials_v2": true
+    },
+    "finishes": [
+      {
+        "id": "nuri",
+        "name": "丹塗"
+      },
+      {
+        "id": "shiraki",
+        "name": "白木"
+      },
+      {
+        "id": "koshoku",
+        "name": "古色"
+      }
+    ]
   }
 }

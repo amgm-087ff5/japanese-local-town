@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- CI が _site 組み立て時にコミット SHA へ置換する(README 参照)。置換されていなければキャッシュ回避クエリは付けない -->
+<meta name="build" content="__BUILD__">
 <title>箱庭 3Dビューア</title>
 <meta name="description" content="GLB/GLTF をブラウザで読み込み、回して眺める簡易3Dビューア">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22%3E%3Cpath d=%22M2 5.5c6 1 14 1 20 0M4 9h16M6.5 9v13M17.5 9v13%22 stroke=%22%23c0432a%22 stroke-width=%222.4%22 fill=%22none%22 stroke-linecap=%22round%22/%3E%3C/svg%3E">
@@ -195,6 +197,21 @@ dl.info dd { margin: 0; font-variant-numeric: tabular-nums; text-align: right; w
 .samples { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin: 0 0 14px; }
 .samples:empty { display: none; }
 .samples .btn { height: 32px; font-size: 13px; }
+/* 仕上げ切替(左上) */
+.finishbar {
+  position: fixed; z-index: 14; top: calc(60px + env(safe-area-inset-top)); left: 12px; display: flex; align-items: center; gap: 4px; height: 38px; padding: 3px;
+  background: var(--glass); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+}
+.finishbar[hidden] { display: none; }
+.finishbar .flbl { padding: 0 4px 0 7px; color: var(--ink-2); font-size: 12px; white-space: nowrap; }
+.fseg { display: flex; gap: 2px; }
+.fseg button { position: relative; height: 30px; padding: 0 10px; border: 0; border-radius: 6px; background: none; color: var(--ink-2); font-size: 13px; cursor: pointer; white-space: nowrap; overflow: hidden; }
+.fseg button:hover { background: var(--shu-soft); color: var(--ink); }
+.fseg button[aria-checked="true"] { background: var(--shu); color: #fff; font-weight: 700; }
+.fseg button:disabled { cursor: progress; }
+.fseg button:focus-visible { outline: 2px solid var(--shu); outline-offset: 1px; }
+.fseg button[aria-busy="true"]::after { content: ""; position: absolute; left: 0; bottom: 0; height: 2px; width: 40%; background: currentColor; opacity: .8; animation: fslide 1s ease-in-out infinite alternate; }
+@keyframes fslide { from { transform: translateX(0); } to { transform: translateX(150%); } }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 
 /* スマホ:パネルはボトムシート */
@@ -207,6 +224,7 @@ dl.info dd { margin: 0; font-variant-numeric: tabular-nums; text-align: right; w
   .panel.collapsed { transform: translateY(calc(100% + 16px)); }
   .hud { left: 8px; bottom: calc(8px + env(safe-area-inset-bottom)); font-size: 11px; gap: 8px; }
   .tree { max-height: 30vh; }
+  .finishbar { left: 8px; top: calc(58px + env(safe-area-inset-top)); }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
@@ -309,6 +327,8 @@ dl.info dd { margin: 0; font-variant-numeric: tabular-nums; text-align: right; w
   </div>
 </aside>
 
+<div class="finishbar" id="finish" hidden><span class="flbl" id="finLbl">仕上げ</span><div class="fseg" id="finSeg" role="radiogroup" aria-labelledby="finLbl"></div></div>
+
 <div class="hud" id="hud"><span>FPS <b id="hFps">—</b></span><span>△ <b id="hTris">0</b></span></div>
 
 <div class="loading" id="loading" role="status" aria-live="polite"><div class="pct" id="loadPct">0%</div><div class="sub" id="loadSub">読み込み中…</div></div>
@@ -335,12 +355,16 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 const CDN = 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/libs/';
 const $ = (id) => document.getElementById(id);
+// キャッシュ回避:<meta name="build"> が CI で置換されていればサイト内の相対 URL に ?v=<build> を付ける
+const BUILD = (() => { const b = document.querySelector('meta[name="build"]')?.content || ''; return /^[\w.-]{1,64}$/.test(b) && b.slice(0, 2) !== '__' ? b : ''; })();
+const v = (u) => (!BUILD || typeof u !== 'string' || /^([a-z][\w+.-]*:|\/\/)/i.test(u) ? u : u + (u.includes('?') ? '&' : '?') + 'v=' + encodeURIComponent(BUILD));
+const safeURL = (u) => typeof u === 'string' && u && !/^\s*(javascript|data|blob|vbscript):/i.test(u);
 const store = {
   get(k, d) { try { const v = localStorage.getItem('hakoniwa-viewer:' + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem('hakoniwa-viewer:' + k, JSON.stringify(v)); } catch { /* 無視 */ } },
 };
 // テスト用に状態を公開
-const state = window.viewerState = { loaded: false, error: null, tris: 0, objects: 0, name: '' };
+const state = window.viewerState = { loaded: false, error: null, tris: 0, objects: 0, name: '', build: BUILD, finish: null, finishes: [], finishMode: null };
 
 /* ---------- レンダラ ---------- */
 const stage = $('stage');
@@ -432,11 +456,31 @@ function applyQuality() {
   invalidate(true);
 }
 
+/* UI(上部バー・仕上げ・パネル・HUD)に隠れない領域。投影中心をその中央へずらし、全体表示もその内側に収める */
+let ins = { t: 0, b: 0, l: 0, r: 0 }, atHome = false;
+function measureInsets() {
+  const h = stage.clientHeight || 1;
+  const narrowNow = matchMedia('(max-width: 640px)').matches;
+  const open = !$('panel').classList.contains('collapsed');
+  const fb = $('finish');
+  const top = fb.hidden ? $('stage').getBoundingClientRect().top + document.querySelector('.topbar').offsetHeight : fb.offsetTop + fb.offsetHeight;
+  return {
+    t: Math.min(top + 8, h * 0.35),
+    b: Math.min(open && narrowNow ? $('panel').offsetHeight + 8 : $('hud').offsetHeight + 20, h * 0.6),
+    l: 8,
+    r: open && !narrowNow ? $('panel').offsetWidth + 24 : 8,
+  };
+}
 function resize() {
   const w = stage.clientWidth, h = stage.clientHeight;
   renderer.setSize(w, h, false);
   camera.aspect = w / Math.max(1, h);
+  ins = measureInsets();
+  const ox = (ins.r - ins.l) / 2, oy = (ins.b - ins.t) / 2;
+  if (w && h && (ox || oy)) camera.setViewOffset(w, h, ox, oy, w, h); else camera.clearViewOffset();
   camera.updateProjectionMatrix();
+  // 読込後に触っていなければ、今の向きのまま収め直す(仕上げバーの表示・パネル開閉・画面回転など)
+  if (atHome && model) frameBox(modelBox, camera.position.clone().sub(controls.target));
   invalidate();
 }
 window.addEventListener('resize', resize);
@@ -468,18 +512,42 @@ setInterval(() => {
 }, 1000);
 
 /* ---------- カメラ ---------- */
+/* バウンディングボックスの 8 隅が、縦横それぞれの画角(縦長なら水平画角が効く)と UI 余白の内側に収まる距離。
+   自動回転中は Y 軸まわり全方位で収まる距離にする。回転中心はボックスの中心。 */
+const UP = new THREE.Vector3(0, 1, 0);
+function fitDistance(box, center, dir, allAz) {
+  const w = stage.clientWidth || 1, h = stage.clientHeight || 1;
+  const uw = Math.max(w - ins.l - ins.r, w * 0.4), uh = Math.max(h - ins.t - ins.b, h * 0.3);
+  const tan = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
+  const ty = tan * uh / h, tx = tan * uw / h;
+  const corners = [];
+  for (let i = 0; i < 8; i++) corners.push(new THREE.Vector3(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z).sub(center));
+  const dk = new THREE.Vector3(), right = new THREE.Vector3(), up = new THREE.Vector3();
+  const n = allAz ? 72 : 1;
+  let dist = 0;
+  for (let k = 0; k < n; k++) {
+    dk.copy(dir).applyAxisAngle(UP, (k / n) * Math.PI * 2);
+    right.crossVectors(UP, dk);
+    if (right.lengthSq() < 1e-10) right.set(1, 0, 0);
+    right.normalize(); up.crossVectors(dk, right);
+    for (const p of corners) {
+      const s = p.dot(dk);
+      dist = Math.max(dist, s + Math.abs(p.dot(right)) / tx, s + Math.abs(p.dot(up)) / ty);
+    }
+  }
+  return Math.max(dist * 1.04, 0.01);
+}
 function frameBox(box, dir) {
   if (box.isEmpty()) return;
   const sphere = box.getBoundingSphere(new THREE.Sphere());
   const r = Math.max(sphere.radius, 0.01);
-  const fov = THREE.MathUtils.degToRad(camera.fov);
-  const fitH = r / Math.sin(fov / 2);
-  const fitW = r / Math.sin(Math.atan(Math.tan(fov / 2) * camera.aspect));
-  const dist = Math.max(fitH, fitW) * 1.08;
+  const center = box.getCenter(new THREE.Vector3());
   const d = (dir || camera.position.clone().sub(controls.target)).clone().normalize();
   if (!isFinite(d.x) || d.lengthSq() === 0) d.set(1, 0.6, 1).normalize();
-  controls.target.copy(sphere.center);
-  camera.position.copy(sphere.center).addScaledVector(d, dist);
+  ins = measureInsets();
+  const dist = fitDistance(box, center, d, controls.autoRotate);
+  controls.target.copy(center);
+  camera.position.copy(center).addScaledVector(d, dist);
   camera.near = Math.max(dist / 1000, 0.001);
   camera.far = dist * 20 + r * 10;
   camera.updateProjectionMatrix();
@@ -487,7 +555,9 @@ function frameBox(box, dir) {
   controls.minDistance = r * 0.02;
   controls.update();
   invalidate();
+  atHome = box === modelBox;
 }
+controls.addEventListener('start', () => { atHome = false; });
 const VIEWS = {
   front: new THREE.Vector3(0, 0.12, 1), side: new THREE.Vector3(1, 0.12, 0),
   top: new THREE.Vector3(0, 1, 0.0001), iso: new THREE.Vector3(1, 0.75, 1.1),
@@ -597,6 +667,7 @@ function setPanel(open) {
   panel.classList.toggle('collapsed', !open);
   $('btnPanel').setAttribute('aria-expanded', open);
   store.set('panel', open);
+  resize();   // 投影中心を空いている領域の中央へ
 }
 $('btnPanel').addEventListener('click', () => setPanel(panel.classList.contains('collapsed')));
 
@@ -620,29 +691,51 @@ const fmtBytes = (b) => b > 1048576 ? (b / 1048576).toFixed(1) + ' MB' : (b / 10
 const fmtNum = (n) => n.toLocaleString('ja-JP');
 
 /* ---------- 読み込み ---------- */
-function disposeTree(root) {
+function disposeTree(root, vc) {
+  const mats = new Set();
   root.traverse((o) => {
     if (o.geometry) o.geometry.dispose();
-    if (o.material) [].concat(o.material).forEach((m) => {
-      for (const k in m) if (m[k] && m[k].isTexture) { m[k].dispose(); m[k].source?.data?.close?.(); }
-      m.dispose();
-    });
+    if (o.material) [].concat(o.material).forEach((m) => mats.add(m));
+  });
+  if (vc) vc.used.forEach((m) => mats.add(m));
+  const tex = new Set();
+  mats.forEach((m) => {
+    if (!m) return;
+    for (const k in m) if (m[k] && m[k].isTexture && !tex.has(m[k])) { tex.add(m[k]); m[k].dispose(); m[k].source?.data?.close?.(); }
+    m.dispose();
   });
 }
+/* KHR_materials_variants(three の examples webgl_loader_gltf_variants と同じ方式) */
+async function prepareVariants(gltf) {
+  const ext = gltf.userData?.gltfExtensions?.KHR_materials_variants;
+  if (!ext || !Array.isArray(ext.variants) || !ext.variants.length) return null;
+  const parser = gltf.parser, meshes = [], idx = new Set();
+  (gltf.scene || gltf.scenes?.[0])?.traverse((o) => {
+    const m = o.isMesh && o.userData.gltfExtensions?.KHR_materials_variants;
+    if (!m || !Array.isArray(m.mappings)) return;
+    o.userData.originalMaterial = o.material;
+    meshes.push([o, m.mappings]);
+    m.mappings.forEach((x) => idx.add(x.material));
+  });
+  const mats = new Map();
+  await Promise.all([...idx].map(async (i) => mats.set(i, await parser.getDependency('material', i))));
+  return { parser, names: ext.variants.map((x) => String(x && x.name || '')), meshes, mats, used: new Set([...mats.values(), ...meshes.map(([o]) => o.material)]) };
+}
+let vctx = null;
 function disposeModel() {
   if (!model) return;
   scene.remove(model);
-  disposeTree(model);
-  model = null;
+  disposeTree(model, vctx);
+  model = null; vctx = null;
   blobURLs.forEach((u) => URL.revokeObjectURL(u)); blobURLs = [];
   manager.setURLModifier(undefined);
 }
 
-function onLoaded(gltf, name, bytes, t0) {
-  disposeModel();
+function onLoaded(gltf, name, bytes, t0, opt = {}) {
   const root3d = gltf.scene || gltf.scenes?.[0];
   if (!root3d) throw new Error('シーンが含まれていません');
-  model = root3d;
+  disposeModel();
+  model = root3d; vctx = opt.vc || null;
   let tris = 0, meshes = 0, nodes = 0;
   const wire = $('chkWire').checked;
   model.traverse((o) => {
@@ -672,7 +765,10 @@ function onLoaded(gltf, name, bytes, t0) {
   applyQuality();
   setupGround();
   placeSun();
-  frameBox(modelBox, VIEWS.iso);
+  if (opt.keepView) {   // 仕上げ別 GLB の差し替え:視点はそのまま
+    const d = camera.position.distanceTo(controls.target);
+    camera.near = Math.max(Math.min(d, modelSize) / 1000, 0.001); camera.far = d * 20 + modelSize * 10; camera.updateProjectionMatrix();
+  } else frameBox(modelBox, VIEWS.iso);
   buildTree(model);
 
   const dt = ((performance.now() - t0) / 1000).toFixed(2);
@@ -687,6 +783,7 @@ function onLoaded(gltf, name, bytes, t0) {
   Object.assign(state, { loaded: true, error: null, tris: triCount, objects: meshes, nodes, name, size: size.toArray() });
   setProgress(null);
   invalidate(true);
+  setupFinishes(opt.ctx || null);
 }
 
 function onError(err, name) {
@@ -698,7 +795,7 @@ function onError(err, name) {
 }
 
 let loadSeq = 0;   // 後から始めた読込を優先(古い結果は捨てる)
-function loadURL(url, name, quiet = false) {
+function loadURL(url, name, quiet = false, opt = {}) {
   const t0 = performance.now(), my = ++loadSeq;
   name = name || decodeURIComponent(url.split('/').pop().split('?')[0]);
   state.loaded = false;
@@ -706,9 +803,11 @@ function loadURL(url, name, quiet = false) {
   let total = 0;
   return new Promise((resolve) => {
     loader.load(url,
-      (gltf) => {
-        if (my !== loadSeq) { if (gltf.scene) disposeTree(gltf.scene); resolve(false); return; }
-        try { onLoaded(gltf, name, total, t0); } catch (e) { onError(e, name); } resolve(true);
+      async (gltf) => {
+        let vc = null;
+        try { vc = await prepareVariants(gltf); } catch (e) { console.warn('仕上げ(variants)の準備に失敗:', e); }
+        if (my !== loadSeq) { if (gltf.scene) disposeTree(gltf.scene, vc); resolve(false); return; }
+        try { onLoaded(gltf, name, total, t0, { ...opt, vc }); } catch (e) { onError(e, name); } resolve(true);
       },
       (ev) => { if (ev.lengthComputable && ev.total) { total = ev.total; setProgress(ev.loaded / ev.total, `${name} — ${fmtBytes(ev.loaded)} / ${fmtBytes(ev.total)}`); } else if (ev.loaded) setProgress(-1, `${name} — ${fmtBytes(ev.loaded)}`); },
       (err) => { if (my !== loadSeq) { resolve(false); return; } if (quiet) { setProgress(null); resolve(false); } else { onError(err, name); resolve(false); } });
@@ -723,6 +822,7 @@ function loadFiles(fileList) {
   const t0 = performance.now();
   ++loadSeq;   // 読込中のサンプル/URL は破棄
   markSample(null);
+  curSample = null; ++openSeq;
   setURLParam(null);
   setProgress(0, main.name);
   const reader = new FileReader();
@@ -739,8 +839,12 @@ function loadFiles(fileList) {
       return map.get(key) || url;
     });
     setTimeout(() => {   // 進捗表示を先に描かせる
-      loader.parse(reader.result, '', (gltf) => {
-        try { onLoaded(gltf, main.name, main.size, t0); blobURLs = pending; } catch (e) { onError(e, main.name); }
+      const my = loadSeq;
+      loader.parse(reader.result, '', async (gltf) => {
+        let vc = null;
+        try { vc = await prepareVariants(gltf); } catch (e) { console.warn('仕上げ(variants)の準備に失敗:', e); }
+        if (my !== loadSeq) { if (gltf.scene) disposeTree(gltf.scene, vc); return; }
+        try { onLoaded(gltf, main.name, main.size, t0, { vc }); blobURLs = pending; } catch (e) { onError(e, main.name); }
       }, (err) => onError(err, main.name));
     }, 30);
   };
@@ -859,22 +963,35 @@ frameBox(new THREE.Box3(new THREE.Vector3(-5, 0, -5), new THREE.Vector3(5, 3, 5)
 loop();
 
 /* ---------- サンプルモデル(Pages の models/index.json) ---------- */
-let samples = [];
+let samples = [], curSample = null;
+const params0 = new URLSearchParams(location.search);
+let wantFin = params0.get('f') || null;
 function setURLParam(id) {
   const u = new URL(location.href);
   u.searchParams.delete('model');
-  if (id) u.searchParams.set('m', id); else u.searchParams.delete('m');
+  if (id) u.searchParams.set('m', id); else { u.searchParams.delete('m'); u.searchParams.delete('f'); }
   history.replaceState(history.state, '', u);
 }
 function markSample(id) {
   $('sampleMenu').querySelectorAll('button').forEach((b) => b.setAttribute('aria-checked', b.dataset.id === id));
 }
-function openSample(e, updateURL = true) {
+async function openSample(e, updateURL = true) {
   setMenu(false);
   markSample(e.id);
+  curSample = e;
   if (updateURL) setURLParam(e.id);
-  return loadURL(e.url, e.name || e.id);
+  const my = ++openSeq;
+  // 仕上げ情報(index.json か stats.json)。仕上げ別 GLB で ?f 指定があれば最初からその GLB を読む
+  let fi = finOf(e, null), stats;
+  hideFinish();
+  const statsP = e.stats ? fetch(e.stats, { cache: 'no-cache' }).then((r) => (r.ok ? r.json() : null)).catch(() => null) : Promise.resolve(null);
+  if (!fi && wantFin && e.stats) { stats = await statsP; if (my !== openSeq) return false; fi = finOf(e, stats); }
+  const f = fi && fi.mode === 'separate' ? findFin(fi, wantFin) || fi.list[0] : null;
+  const url = f ? finURL(e, f) : e.url;
+  const ok = await loadURL(url, e.name || e.id, false, { ctx: { entry: e, statsP, url } });
+  return ok;
 }
+let openSeq = 0;
 function setMenu(open) {
   const m = $('sampleMenu');
   if (open) m.style.top = Math.round(document.querySelector('.topbar').getBoundingClientRect().bottom + 6) + 'px';
@@ -895,15 +1012,19 @@ document.addEventListener('keydown', (ev) => {
 });
 async function loadIndex() {
   // Pages 構成: /app/ から見て ../models/index.json。パスはサイトルート(models/ の親)基準
-  const idx = new URL('../models/index.json', location.href);
+  const idx = new URL(v('../models/index.json'), location.href);
   try {
     const r = await fetch(idx, { cache: 'no-cache' });
     if (!r.ok || /text\/html/i.test(r.headers.get('content-type') || '')) return [];
     const j = await r.json();
     const root = new URL('../', idx);
     return (Array.isArray(j) ? j : j?.models || [])
-      .filter((e) => e && e.id != null && typeof e.glb === 'string' && !/^\s*(javascript|data|blob|vbscript):/i.test(e.glb))
-      .map((e) => ({ id: String(e.id), name: e.name ? String(e.name) : '', url: new URL(e.glb, root).href }));
+      .filter((e) => e && e.id != null && safeURL(e.glb))
+      .map((e) => ({
+        id: String(e.id), name: e.name ? String(e.name) : '', root, url: new URL(v(e.glb), root).href,
+        stats: safeURL(e.stats) ? new URL(v(e.stats), root).href : null,
+        finishes: Array.isArray(e.finishes) ? e.finishes : undefined, finish_mode: e.finish_mode,
+      }));
   } catch { return []; }
 }
 function buildSamples(list) {
@@ -924,9 +1045,139 @@ function buildSamples(list) {
   $('btnSamples').hidden = false;
 }
 
+/* ---------- 仕上げ(丹塗/白木/古色 など) ----------
+   stats.json / index.json の "finishes":[{"id","name","glb"?}], "finish_mode":"khr_variants"|"separate"。
+   情報が無くても GLB に KHR_materials_variants があればその名前で出す(ファイルを開いた場合も)。 */
+let fin = null, finCur = null, finCtx = null;
+function normFinishes(list, mode) {
+  if (!Array.isArray(list)) return null;
+  const out = list.map((f) => (typeof f === 'string' ? { id: f } : f)).filter((f) => f && f.id != null && String(f.id))
+    .map((f) => ({ id: String(f.id), name: f.name ? String(f.name) : String(f.id), glb: safeURL(f.glb) ? f.glb : null }));
+  if (!out.length) return null;
+  const m = mode === 'separate' || mode === 'khr_variants' ? mode : out.some((f) => f.glb) ? 'separate' : 'khr_variants';
+  return { list: out, mode: m };
+}
+const finOf = (e, s) => normFinishes(e.finishes, e.finish_mode) || (s && typeof s === 'object' ? normFinishes(s.finishes, s.finish_mode || e.finish_mode) : null);
+const findFin = (fi, id) => (id ? fi.list.find((f) => f.id.toLowerCase() === String(id).toLowerCase()) : null) || null;
+const finURL = (e, f) => (f && f.glb ? new URL(v(f.glb), e.root).href : e.url);
+function hideFinish() { fin = null; finCur = null; renderFinish(); }
+async function setupFinishes(ctx) {
+  const my = loadSeq;
+  finCtx = ctx;
+  let fi = null;
+  if (ctx) { fi = finOf(ctx.entry, null) || finOf(ctx.entry, await ctx.statsP); if (my !== loadSeq) return; }
+  if (!fi && vctx) fi = { list: vctx.names.map((n) => ({ id: n, name: n, glb: null })), mode: 'khr_variants' };
+  if (fi && fi.mode === 'khr_variants' && !vctx) { console.warn('仕上げ: GLB に KHR_materials_variants がありません'); fi = null; }
+  if (fi && fi.mode === 'separate' && !ctx) fi = null;
+  fin = fi;
+  let cur = null;
+  if (fi) {
+    cur = findFin(fi, wantFin);
+    if (!cur && fi.mode === 'separate') cur = fi.list.find((f) => finURL(ctx.entry, f) === ctx.url) || null;
+    cur = cur || fi.list[0];
+  }
+  finCur = cur ? cur.id : null;
+  renderFinish();
+  syncFinURL();
+  if (!cur) return;
+  if (fi.mode === 'khr_variants') applyVariant(cur);
+  else if (finURL(ctx.entry, cur) !== ctx.url) loadFinish(cur);
+}
+function variantIndex(f) {
+  const names = vctx.names, lc = names.map((n) => n.toLowerCase());
+  let i = lc.indexOf(f.id.toLowerCase());
+  if (i < 0) i = names.indexOf(f.name);
+  if (i < 0 && fin) i = fin.list.indexOf(f);
+  return i < names.length ? i : -1;
+}
+function applyVariant(f) {
+  if (!vctx || !model) return;
+  const vi = variantIndex(f), wire = $('chkWire').checked;
+  for (const [o, maps] of vctx.meshes) {
+    const m = vi < 0 ? null : maps.find((x) => Array.isArray(x.variants) && x.variants.includes(vi));
+    o.material = m ? vctx.mats.get(m.material) : o.userData.originalMaterial;
+    vctx.parser.assignFinalMaterial(o);
+    vctx.used.add(o.material);
+    [].concat(o.material).forEach((mm) => { if ('wireframe' in mm) mm.wireframe = wire; });
+  }
+  state.variant = vi < 0 ? null : vctx.names[vi];
+  invalidate(true);
+}
+async function loadFinish(f) {
+  const ctx = finCtx;
+  markFinBusy(f.id);
+  const url = finURL(ctx.entry, f);
+  const ok = await loadURL(url, ctx.entry.name || ctx.entry.id, false, { keepView: true, ctx: { ...ctx, url } });
+  if (ok || finCur === f.id) markFinBusy(null);
+}
+function selectFinish(id) {
+  const f = fin && findFin(fin, id);
+  if (!f) return;
+  wantFin = f.id;
+  if (f.id === finCur) return;
+  finCur = f.id;
+  renderFinish(); syncFinURL();
+  if (fin.mode === 'khr_variants') applyVariant(f); else loadFinish(f);
+}
+function syncFinURL() {
+  const u = new URL(location.href);
+  if (finCur && (wantFin || u.searchParams.has('f')) && curSample && u.searchParams.has('m')) u.searchParams.set('f', finCur);
+  else if (!finCur) u.searchParams.delete('f');
+  if (u.href !== location.href) history.replaceState(history.state, '', u);
+}
+function renderFinish() {
+  const box = $('finish'), seg = $('finSeg');
+  state.finishes = fin ? fin.list.map((f) => f.id) : []; state.finishMode = fin ? fin.mode : null; state.finish = finCur;
+  const was = box.hidden;
+  if (!fin) { box.hidden = true; seg.replaceChildren(); delete seg.dataset.key; }
+  else {
+    const key = fin.list.map((f) => f.id + '\u0000' + f.name).join('\u0001');
+    if (seg.dataset.key !== key) {
+      seg.replaceChildren(...fin.list.map((f) => {
+        const b = document.createElement('button');
+        b.type = 'button'; b.setAttribute('role', 'radio'); b.dataset.id = f.id; b.textContent = f.name; b.title = `${f.name}(${f.id})`;
+        b.addEventListener('click', () => selectFinish(f.id));
+        return b;
+      }));
+      seg.dataset.key = key;
+    }
+    for (const b of seg.children) { const on = b.dataset.id === finCur; b.setAttribute('aria-checked', on); b.tabIndex = on ? 0 : -1; }
+    box.hidden = false;
+  }
+  if (was !== box.hidden) resize();
+}
+function markFinBusy(id) {
+  for (const b of $('finSeg').children) { if (b.dataset.id === id) b.setAttribute('aria-busy', 'true'); else b.removeAttribute('aria-busy'); }
+}
+$('finSeg').addEventListener('keydown', (ev) => {
+  const d = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: 1, ArrowUp: -1 }[ev.key];
+  if (!d) return;
+  const bs = [...$('finSeg').children], i = bs.indexOf(document.activeElement);
+  if (i < 0) return;
+  ev.preventDefault();
+  const n = bs[(i + d + bs.length) % bs.length]; n.focus(); selectFinish(n.dataset.id);
+});
+
+// テスト・デバッグ用
+window.viewerDebug = {
+  cam: () => [...camera.position.toArray(), ...controls.target.toArray()],
+  mats: () => { const n = new Set(); model?.traverse((o) => { if (o.isMesh) [].concat(o.material).forEach((m) => n.add(m.name)); }); return [...n].sort(); },
+  bounds: () => {   // モデルのボックスが占める画面範囲(CSS px)と UI 余白
+    if (!model) return null;
+    camera.updateMatrixWorld();
+    const w = stage.clientWidth, h = stage.clientHeight;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (let i = 0; i < 8; i++) {
+      const p = new THREE.Vector3(i & 1 ? modelBox.max.x : modelBox.min.x, i & 2 ? modelBox.max.y : modelBox.min.y, i & 4 ? modelBox.max.z : modelBox.min.z).project(camera);
+      const x = (p.x + 1) / 2 * w, y = (1 - p.y) / 2 * h;
+      x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+    }
+    return { x0, y0, x1, y1, w, h, ins: { ...ins } };
+  },
+};
+
 (async () => {
-  const params = new URLSearchParams(location.search);
-  const q = params.get('model'), m = params.get('m');
+  const q = params0.get('model'), m = params0.get('m');
   samples = await loadIndex();
   state.samples = samples.map((e) => e.id);
   if (samples.length) buildSamples(samples);
@@ -939,8 +1190,8 @@ function buildSamples(list) {
   // Pages 構成 (/app/ → ../models/) → 同階層 → リポジトリ構成 (viewer/ → ../haiden/out/) の順に探す
   for (const u of ['../models/haiden_web.glb', 'haiden_web.glb', '../haiden/out/haiden_web.glb']) {
     try {
-      const r = await fetch(u, { method: 'HEAD', cache: 'no-store' });
-      if (r.ok && !/text\/html/i.test(r.headers.get('content-type') || '')) { if (await loadURL(u, 'haiden_web.glb', true)) return; }
+      const r = await fetch(v(u), { method: 'HEAD', cache: 'no-store' });
+      if (r.ok && !/text\/html/i.test(r.headers.get('content-type') || '')) { if (await loadURL(v(u), 'haiden_web.glb', true)) return; }
     } catch { /* 無ければ次へ */ }
   }
   $('empty').hidden = false;

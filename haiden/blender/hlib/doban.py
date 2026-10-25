@@ -32,7 +32,7 @@ DEF = dict(
     col=0.06, row=0.07,          # base grid spacing (m)
     tile=1.8,                    # UV: 1 unit = 1.8 m (10 rows x 3 plates per texture tile)
     hip_k=0.70, hip_kd=1.0,      # rounded hip: smooth-min width, distance from the eave where it is reached
-    mino_h=0.12, mino_w=0.40, mino_p=2.2,   # 箕甲: roll depth at the verge, width, exponent
+    mino_h=0.16, mino_w=0.45, mino_p=2.2,   # 箕甲: roll depth at the verge, width, exponent
     mino_foot=0.55, mino_clear=0.025, overlap=0.03,
     nobori_t=0.045, nobori_n=2,  # 登り軒付 (verge copper edge) height / layers
     nk_layers=3, nk_proj=0.014, nk_lean=0.006, nk_ch=0.003, nk_depth=0.30,

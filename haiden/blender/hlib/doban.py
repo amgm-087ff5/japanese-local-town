@@ -41,7 +41,7 @@ DEF = dict(
     hafu=dict(t=0.055, d1=0.024, p1=0.030, d2=0.032, p2a=0.026, p2b=0.014, d3=0.012, p3=0.008,
               mayu_h=0.040, mayu_step=0.008, grooves=[0.022, 0.044], groove_w=0.011, groove_d=0.007,
               kuri_L=0.22, kuri_H=0.42, plate_L=0.28, ogami_L=0.26, mid_L=0.20, rokuyo_r=0.036),
-    hafu_h=0.24, kara_h=0.27, kara_t=0.065, side_h=0.22, side_t=0.055,
+    hafu_h=0.24, kara_h=0.27, kara_t=0.055, side_h=0.22, side_t=0.045,
     k_mino_h=0.05, k_mino_w=0.22, k_nobori_t=0.04,
     tex_size=1024,
 )
@@ -532,22 +532,22 @@ def _lerp(a, b, t):
     return np.asarray(a) * (1 - t) + np.asarray(b) * t
 
 
-PALE = np.array([0.20, 0.40, 0.31])      # 緑青 pale (linear)
-TEAL = np.array([0.065, 0.20, 0.145])
-DARK = np.array([0.035, 0.07, 0.05])
-BROWN = np.array([0.10, 0.045, 0.022])
+PALE = np.array([0.25, 0.41, 0.34])      # 緑青 pale mint-grey (linear; ref. photo 上知我麻神社)
+TEAL = np.array([0.13, 0.27, 0.215])
+DARK = np.array([0.06, 0.10, 0.08])
+BROWN = np.array([0.10, 0.06, 0.035])
 
 
 def _patina(N, rng, streak_len=70.0):
     cov = _fbm(N, rng, [60, 18, 5], [0.6, 0.3, 0.15])
-    cov = sstep(-0.9, 0.7, cov)
+    cov = sstep(-1.4, 0.9, cov)
     col = _lerp(TEAL, PALE, cov)
     brown = sstep(1.5, 2.3, _fbm(N, rng, [14, 4], [0.8, 0.3]))
-    col = _lerp(col, BROWN, brown * 0.85)
+    col = _lerp(col, BROWN, brown * 0.6)
     streak = _pnoise(N, 2.5, streak_len, rng)
-    col = col * (1 + 0.10 * np.tanh(streak))[..., None]
+    col = col * (1 + 0.07 * np.tanh(streak))[..., None]
     dark = sstep(0.8, 2.0, _pnoise(N, 30, 90, rng))
-    col = _lerp(col, DARK, dark * 0.35)
+    col = _lerp(col, DARK, dark * 0.18)
     return col, cov, brown, streak
 
 

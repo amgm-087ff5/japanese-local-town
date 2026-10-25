@@ -31,7 +31,8 @@ QUALITY = {
     "final": dict(res=(1600, 900), samples=64, bounces=6),
 }
 # A-2: ~1M tris of glossy tiles + 5 views (A-1: 4) -> slightly fewer samples (OIDN denoised)
-QUALITY_OVERRIDE = {"A-2v1": {"final": dict(samples=56)}, "A-2": {"final": dict(samples=32)}}
+QUALITY_OVERRIDE = {"A-2v1": {"final": dict(samples=56)}, "A-2": {"final": dict(samples=32)},
+                    "A-1": {"final": dict(samples=40)}}
 
 DEBUG_VIEWS = {
     "debug_back": ("背面(確認用)", (13.0, 15.0, 9.0), (0.0, 0.0, 4.5), 28, 40, 30, 2.4, 0.45),
@@ -80,7 +81,23 @@ DEBUG_VIEWS_A2V2 = dict(DEBUG_VIEWS_A2, **{
     "dbg_chidori_ogami": ("千鳥破風 拝み(確認用)", (0.9, -5.6, 5.9), (0.0, -2.95, 6.1), 40, 40, 215, 2.4, 0.45, "nuri"),
     "dbg_tsuma_jiri": ("妻 破風尻(確認用)", (5.4, -3.6, 5.3), (3.7, -2.0, 5.3), 40, 40, 215, 2.4, 0.45, "nuri"),
 })
-VIEW_SETS = {"A-1": (VIEWS, DEBUG_VIEWS), "A-2v1": (VIEWS_A2, DEBUG_VIEWS_A2), "A-2": (VIEWS_A2V2, DEBUG_VIEWS_A2V2)}
+# A-1 ver2 (銅板一文字葺: 軒付・箕甲・隅): front_oblique* use the A-1 ver1 front_oblique composition (comparison)
+VIEWS_A1V2 = {
+    "front_oblique": ("正面斜め(古色)", (-9.5, -16.5, 2.6), (0.4, -1.4, 3.9), 30, 38, 215, 2.4, 0.45, "koshoku"),
+    "front_oblique_nuri": ("正面斜め(丹塗)", (-9.5, -16.5, 2.6), (0.4, -1.4, 3.9), 30, 38, 215, 2.4, 0.45, "nuri"),
+    "karahafu": ("唐破風と軒付(古色)", (2.3, -9.0, 3.3), (0.0, -5.3, 4.15), 34, 40, 215, 2.4, 0.45, "koshoku"),
+    "noki_sumi": ("軒先と隅(古色)", (8.6, -7.6, 3.5), (4.6, -3.5, 4.8), 34, 40, 215, 2.4, 0.45, "koshoku"),
+    "tsuma_minoko": ("妻・箕甲(古色)", (9.8, -4.8, 7.4), (3.7, -0.6, 5.9), 32, 40, 215, 2.4, 0.45, "koshoku"),
+}
+DEBUG_VIEWS_A1V2 = {
+    "dbg_back": ("背面(確認用)", (13.0, 15.0, 9.0), (0.0, 0.0, 4.5), 28, 40, 30, 2.4, 0.45, "koshoku"),
+    "dbg_top": ("俯瞰(確認用)", (-8.0, -12.0, 13.0), (0.0, -0.5, 4.5), 30, 40, 215, 2.4, 0.45, "koshoku"),
+    "dbg_noki_macro": ("軒付マクロ(確認用)", (3.4, -5.6, 4.15), (2.8, -3.9, 4.6), 40, 40, 215, 2.4, 0.45, "koshoku"),
+    "dbg_kohai_side": ("向拝側面の取合い(確認用)", (5.8, -7.8, 4.8), (1.9, -3.6, 4.6), 30, 40, 215, 2.4, 0.45, "koshoku"),
+    "dbg_tsuma_foot": ("妻の裾・破風尻(確認用)", (7.6, -5.2, 5.6), (3.7, -1.9, 5.4), 32, 40, 215, 2.4, 0.45, "nuri"),
+}
+VIEW_SETS = {"A-1v1": (VIEWS, DEBUG_VIEWS), "A-2v1": (VIEWS_A2, DEBUG_VIEWS_A2), "A-2": (VIEWS_A2V2, DEBUG_VIEWS_A2V2),
+             "A-1": (VIEWS_A1V2, DEBUG_VIEWS_A1V2)}
 
 
 def link(ob, cname="Env"):

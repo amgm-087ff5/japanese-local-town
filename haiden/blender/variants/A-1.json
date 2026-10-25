@@ -12,7 +12,7 @@
       "step_lip": 0.0,
       "step_len": 50.0,
       "hafu_h": 0.24,
-      "hafu_t": 0.055
+      "hafu_t": 0.045
     },
     "doban_v2": {
       "enabled": true

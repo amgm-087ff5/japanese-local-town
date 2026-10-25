@@ -30,8 +30,8 @@ QUALITY = {
     "preview": dict(res=(960, 540), samples=24, bounces=4),
     "final": dict(res=(1600, 900), samples=64, bounces=6),
 }
-# A-2 has ~1M tris of glossy tiles (≈2x A-1 render time): fewer samples, OIDN denoised
-QUALITY_OVERRIDE = {"A-2": {"final": dict(samples=40)}}
+# A-2: ~1M tris of glossy tiles + 5 views (A-1: 4) -> slightly fewer samples (OIDN denoised)
+QUALITY_OVERRIDE = {"A-2": {"final": dict(samples=56)}}
 
 DEBUG_VIEWS = {
     "debug_back": ("背面(確認用)", (13.0, 15.0, 9.0), (0.0, 0.0, 4.5), 28, 40, 30, 2.4, 0.45),

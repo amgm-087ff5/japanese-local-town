@@ -483,12 +483,13 @@ def build_chidori(c, ch, CH, KP, MB, ridge_parts, counts, zm, make_col, lay, kak
 
     # valley boards (谷板): strip following max(main, chidori) across the crease
     for sx in (-1, 1):
-        yv = np.linspace(ch.y_vs + 1e-3, ch.y_r, 40)
+        # sunk flush with the base: only the channel between the cut tile ends shows
+        yv = np.linspace(ch.y_vs + 0.02, ch.y_r - 0.15, 40)
         xv = ch.x_v(yv)
-        offs = np.linspace(-0.16, 0.16, 7)
+        offs = np.linspace(-0.16, 0.16, 9)
         Xg_ = sx * (xv[:, None] + offs[None, :])
         Yg_ = np.repeat(yv[:, None], len(offs), 1)
-        Zt = np.maximum(zm(Xg_, Yg_), zc(Xg_)) + 0.012
+        Zt = np.maximum(zm(Xg_, Yg_), zc(Xg_)) + 0.004
         if sx < 0:
             Xg_, Yg_, Zt = Xg_[:, ::-1], Yg_[:, ::-1], Zt[:, ::-1]
         MB["tani"].addt(slab_grid(Xg_, Yg_, Zt, Zt - 0.01))

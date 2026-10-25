@@ -28,7 +28,7 @@
       "maru_w0": 0.052,
       "noki_proj": 0.08,
       "hip_overlap": 0.07,
-      "valley_gap": 0.07,
+      "valley_gap": 0.1,
       "chidori_foot_gap": 0.03,
       "sode_inset": 0.075,
       "omune_base": 0.0,

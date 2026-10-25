@@ -533,7 +533,7 @@ def _lerp(a, b, t):
 
 
 PALE = np.array([0.25, 0.41, 0.34])      # 緑青 pale mint-grey (linear; ref. photo 上知我麻神社)
-TEAL = np.array([0.13, 0.27, 0.215])
+TEAL = np.array([0.16, 0.31, 0.25])
 DARK = np.array([0.06, 0.10, 0.08])
 BROWN = np.array([0.10, 0.06, 0.035])
 

@@ -849,7 +849,8 @@ def build(p):
                 ol = PT.onita_outline(0.36, 0.42)
                 fu = np.array([-dvec[1], dvec[0], 0])
                 smo.addt(G.extrude_poly(ol, 0.06, (pts[0] + np.array([0, 0, -0.10]) + dvec * 0.03, fu, np.array([0, 0, 1.0])), bevel=0.01))
-            yy = np.linspace(-(Ye - dg), Ye - dg, 30)
+            yw = (Ye - dg) - (0.35 if DV2 else 0.0)     # ver2: keep the ends under the gable (rounded hip)
+            yy = np.linspace(-yw, yw, 30)
             zz = RF.z(sx * Xg, yy, dg, False) + 0.03
             pts = np.stack([np.full_like(yy, sx * (Xg + 0.02)), yy, zz], 1)
             V, F = G.sweep(pts, G.rect_profile(0.16, 0.12, 0.02), mode="vertical")
@@ -924,7 +925,8 @@ def build(p):
                 continue
             kg.addt(G.beams([(xw + sx * 0.055, inside[0], z_)], [(xw + sx * 0.055, inside[-1], z_)], 0.035, 0.035))
         # tsuma-koryo / beam at the bottom of the gable
-        tb.addt(G.cbox((xw - 0.08, -(Ye - dg), zbase - 0.06), (xw + 0.08, Ye - dg, zbase + 0.10), 0.02) if True else None)
+        yb = (Ye - dg) - (0.30 if DV2 else 0.0)
+        tb.addt(G.cbox((xw - 0.08, -yb, zbase - 0.06), (xw + 0.08, yb, zbase + 0.10), 0.02) if True else None)
         # gegyo (懸魚) at the apex
         W_, H_ = 0.80, 0.78
         z_g = RF.z(Xg + ho, 0, Ye, False) - R["hafu_h"] + 0.06

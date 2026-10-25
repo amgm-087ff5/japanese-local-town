@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Render the haiden with Cycles (CPU) in a simple shrine precinct.
 
-    HAIDEN_QUALITY=preview|final python3 haiden/blender/render.py --out haiden/out [--only front,side]
+    HAIDEN_QUALITY=preview|final python3 haiden/blender/render.py --out haiden/out/A-2 [--only front,side]
 
 Loads <out>/haiden.blend, adds ground (gravel), sando (stone path), cedars,
-stone lanterns, sky + sun, and renders 4 views to <out>/renders/*.png.
-Updates <out>/stats.json "renders".
+stone lanterns, sky + sun, and renders the views of the variant (stats.json
+"id": A-1 -> VIEWS, A-2 -> VIEWS_A2) to <out>/renders/*.png.
+Updates <out>/stats.json "renders" with site-root paths renders/<id>/<view>.png.
 """
 import argparse
 import json
@@ -43,6 +44,23 @@ VIEWS = {
     "kohai_closeup": ("向拝アップ", (2.4, -9.8, 1.8), (0.0, -4.3, 3.6), 26, 42, 220, 2.4, 0.45),
     "sunset": ("夕景", (11.0, -15.5, 2.2), (0.0, -1.0, 4.2), 30, 4, 262, 4.5, 0.22),
 }
+
+# A-2 (本瓦葺 + 千鳥破風): edge/eave close-ups are the point of this variant
+VIEWS_A2 = {
+    "front_oblique": ("正面斜め", (-9.5, -16.5, 2.6), (0.4, -1.4, 4.0), 30, 38, 215, 2.4, 0.45),
+    "side": ("側面", (19.0, -3.5, 3.0), (0.0, -0.8, 4.2), 32, 40, 200, 2.4, 0.45),
+    "kohai_chidori": ("向拝アップ(唐破風と千鳥破風)", (2.6, -11.6, 2.0), (0.0, -3.9, 4.55), 28, 42, 220, 2.4, 0.45),
+    "noki_sumi": ("軒先・隅の瓦アップ", (8.6, -7.6, 3.5), (4.55, -3.45, 4.95), 34, 40, 215, 2.4, 0.45),
+    "mune_tsuma": ("棟・妻・降棟と鬼瓦", (10.5, -7.8, 9.6), (3.4, -1.2, 6.2), 34, 44, 230, 2.4, 0.45),
+}
+DEBUG_VIEWS_A2 = {
+    "dbg_chidori_top": ("千鳥破風 俯瞰(確認用)", (5.5, -9.0, 10.5), (0.0, -2.0, 5.6), 30, 44, 230, 2.4, 0.45),
+    "dbg_valley": ("谷(確認用)", (3.5, -5.0, 8.5), (1.2, -2.0, 5.5), 30, 44, 230, 2.4, 0.45),
+    "dbg_karahafu": ("唐破風正面(確認用)", (0.0, -9.5, 4.2), (0.0, -5.0, 4.4), 35, 42, 220, 2.4, 0.45),
+    "dbg_gable_foot": ("妻下・箕甲(確認用)", (8.0, -5.5, 6.2), (4.0, -2.2, 5.4), 30, 40, 215, 2.4, 0.45),
+    "dbg_back": ("背面(確認用)", (13.0, 15.0, 9.0), (0.0, 0.0, 4.5), 28, 40, 30, 2.4, 0.45),
+}
+VIEW_SETS = {"A-1": (VIEWS, DEBUG_VIEWS), "A-2": (VIEWS_A2, DEBUG_VIEWS_A2)}
 
 
 def link(ob, cname="Env"):
@@ -264,8 +282,10 @@ def main():
 
     rdir = os.path.join(out, "renders")
     os.makedirs(rdir, exist_ok=True)
-    ALL = dict(VIEWS, **DEBUG_VIEWS)
-    names = [n for n in ALL if (not a.only and n in VIEWS) or n in a.only.split(",")]
+    vid = stats.get("id", "A-1")
+    views, dbg_views = VIEW_SETS.get(vid, (VIEWS, DEBUG_VIEWS))
+    ALL = dict(views, **dbg_views)
+    names = [n for n in ALL if (not a.only and n in views) or n in a.only.split(",")]
     timing = {}
     for n in names:
         title, loc, tgt, lens, el, az, ss, sk = ALL[n]
@@ -276,13 +296,13 @@ def main():
         t0 = time.time()
         ddir = os.path.join(out, "debug")
         os.makedirs(ddir, exist_ok=True)
-        sc.render.filepath = os.path.join(ddir if n in DEBUG_VIEWS else rdir, n + ".png")
+        sc.render.filepath = os.path.join(ddir if n in dbg_views else rdir, n + ".png")
         bpy.ops.render.render(write_still=True)
         timing[n] = round(time.time() - t0, 1)
         print("rendered %s in %.1fs" % (n, timing[n]), flush=True)
     # update stats.json renders list (all pngs present)
-    present = [v for v in VIEWS if os.path.exists(os.path.join(rdir, v + ".png"))]
-    stats["renders"] = [{"src": "renders/%s.png" % v, "title": VIEWS[v][0]} for v in present]
+    present = [v for v in views if os.path.exists(os.path.join(rdir, v + ".png"))]
+    stats["renders"] = [{"src": "renders/%s/%s.png" % (vid, v), "title": views[v][0]} for v in present]
     stats["render_quality"] = q
     stats.setdefault("render_seconds", {}).update(timing)
     with open(stats_path, "w", encoding="utf-8") as f:

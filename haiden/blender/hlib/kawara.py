@@ -22,6 +22,8 @@ def faces_to_arrays(F):
     """list-of-lists or ndarray faces -> list of homogeneous int arrays."""
     if isinstance(F, np.ndarray):
         return [F.astype(np.int64)]
+    if len(F) and all(isinstance(f, np.ndarray) and f.ndim == 2 for f in F):
+        return [f.astype(np.int64) for f in F if len(f)]
     by = {}
     for f in F:
         by.setdefault(len(f), []).append(f)

@@ -29,6 +29,9 @@ SPEC = {
     "Nuno_Red":             ((0.55, 0.03, 0.03), 0.8, 0.0, "flat"),
     "Nuno_White":           ((0.82, 0.80, 0.76), 0.8, 0.0, "flat"),
     "Nuno_Purple":          ((0.18, 0.04, 0.22), 0.8, 0.0, "flat"),
+    # A-2 本瓦葺: いぶし銀 (smoked silver-grey clay tile) / roof base (葺土・野地)
+    "Kawara_Ibushi":        ((0.075, 0.078, 0.084), 0.36, 0.42, "kawara"),
+    "Kawara_Base":          ((0.035, 0.034, 0.033), 0.9, 0.0, "flat"),
     # environment only
     "Env_Gravel":           ((0.115, 0.105, 0.09), 0.9, 0.0, "gravel"),
     "Env_Sando_Stone":      ((0.17, 0.165, 0.155), 0.85, 0.0, "stone"),
@@ -38,7 +41,7 @@ SPEC = {
 }
 
 BAKE = ["Nuri_Shu_Vermilion", "Kiji_Hinoki_Wood", "Kiji_Old_Wood", "Doban_Rokusho_Copper",
-        "Ishi_Granite", "Gofun_White", "Shikkui_Plaster"]
+        "Ishi_Granite", "Gofun_White", "Shikkui_Plaster", "Kawara_Ibushi"]   # (absent materials are skipped)
 
 
 class NB:
@@ -176,6 +179,14 @@ def make_material(name, use_ao=True):
         color = r.outputs[0]
         height = n2
         rough_f = nb.math("ADD", nb.math("MULTIPLY", n2, 0.2), rough - 0.1)
+    elif kind == "kawara":
+        # いぶし瓦: carbon film = silvery sheen with blotchy darker / lighter firing marks
+        n1 = _periodic_noise(nb, u, v, 3.5, 5, 0.6)
+        n2 = _periodic_noise(nb, u, v, 30.0, 3, 0.55)
+        mix = nb.math("ADD", nb.math("MULTIPLY", n1, 0.7), nb.math("MULTIPLY", n2, 0.3))
+        color = _ramp(nb, mix, _mul(col, 0.62), _mul(col, 1.55), 0.3, 0.72)
+        rough_f = nb.math("ADD", nb.math("MULTIPLY", n1, 0.30), rough - 0.12)
+        height = n2
     elif kind == "metal":
         n1 = _periodic_noise(nb, u, v, 8.0, 4, 0.5)
         color = _ramp(nb, n1, _mul(col, 0.75), col, 0.35, 0.7)
@@ -195,7 +206,7 @@ def make_material(name, use_ao=True):
         color = _ramp(nb, n1, _mul(col, 0.6), _mul(col, 1.6), 0.3, 0.75)
         height = n1
     base = color
-    if use_ao and kind in ("paint", "copper", "plaster", "wood", "stone"):
+    if use_ao and kind in ("paint", "copper", "plaster", "wood", "stone", "kawara"):
         ao = nb.node("ShaderNodeAmbientOcclusion", samples=6)
         ao.inputs["Distance"].default_value = 0.35
         mixn = nb.node("ShaderNodeMix", data_type="RGBA", blend_type="MULTIPLY")

@@ -392,10 +392,11 @@ async function readBody(res, my) {
 let seq = 0, ctrl = null, entries = null;
 const t0 = performance.now();
 
-async function loadEntry(entry, res) {
+async function loadEntry(entry, res, resCtrl) {
   const my = ++seq;
-  if (ctrl) ctrl.abort();
-  if (!res) { ctrl = new AbortController(); res = fetch(entry.glb, { signal: ctrl.signal }); }
+  if (ctrl) ctrl.abort();   // 読込中の前モデルの取得を中断
+  ctrl = resCtrl || new AbortController();
+  if (!res) res = fetch(entry.glb, { signal: ctrl.signal });
   const keepView = $('chkSame').checked && !!model && !!home;
   state.loaded = false; state.error = null; state.current = entry.id;
   markTabs(entry.id, true);
@@ -505,15 +506,14 @@ $('chkSame').addEventListener('change', (ev) => store.set('sameView', ev.target.
 /* ---------- 起動 ---------- */
 resize();
 const boot = await window.__boot;
-ctrl = boot.ctrl;
 if (boot.list) {
   entries = boot.list.map((e) => ({ id: e.id, name: e.name ? String(e.name) : '', glb: e.glb, stats: safeURL(e.stats) ? e.stats : null }));
   state.models = entries.map((e) => e.id);
   buildTabs(entries);
   setEntryUI(entries.find((e) => e.id === boot.entry.id));
-  loadEntry(entries.find((e) => e.id === boot.entry.id), boot.res);
+  loadEntry(entries.find((e) => e.id === boot.entry.id), boot.res, boot.ctrl);
 } else {
-  loadEntry(LEGACY, boot.res);   // index.json なし:従来動作
+  loadEntry(LEGACY, boot.res, boot.ctrl);   // index.json なし:従来動作
 }
 // テスト・デバッグ用
 window.viewerDebug = {

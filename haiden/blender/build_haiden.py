@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """Procedurally build a highly detailed Japanese shrine worship hall (拝殿).
 
-    python3 haiden/blender/build_haiden.py --out haiden/out
+    python3 haiden/blender/build_haiden.py --variant A-1 --out haiden/out/A-1
+    python3 haiden/blender/build_haiden.py --variant A-2 --out haiden/out/A-2
+
+Variants (haiden/blender/variants/<id>.json) deep-merge "params" over params.json.
+A-1 ver1 (frozen): 銅板段葺. A-2: 本瓦葺 + 千鳥破風 (roof_hongawara.py).
 
 Form: 入母屋造・平入・桁行3間×梁間2間・正面1間向拝(軒唐破風)・銅板段葺・丹塗.
 Coordinates: X = 桁行 (width), Y = 梁間 (depth, front = -Y), Z = up, metres.
@@ -17,6 +21,7 @@ import shutil
 import subprocess
 import sys
 import time
+from types import SimpleNamespace
 
 import numpy as np
 
@@ -764,51 +769,56 @@ def build(p):
         else:
             rows = step_rows(0, dg, 0.05, sl)
             add_patch(roof, rows, lambda d: (-(A_e - d), A_e - d), int(2 * A_e / cs), mp)
-    emit("Yane_Doban_CopperRoof", roof, "Doban_Rokusho_Copper", C, smooth=40)
+    HONG = R.get("type", "doban") == "hongawara"
+    if HONG:
+        emit("Yane_Nodi_KawaraBase", roof, "Kawara_Base", C, smooth=40)
+    else:
+        emit("Yane_Doban_CopperRoof", roof, "Doban_Rokusho_Copper", C, smooth=40)
 
     # hakomune (box ridge) + onita
     hm = G.MB(); crest = G.MB(); oni = G.MB()
     L = Xg + ho + 0.04
-    zb0 = z_apex - 0.32
-    hb = R["hakomune_h"]
-    hm.addt(G.cbox((-L, -0.19, zb0), (L, 0.19, zb0 + 0.32 + hb * 0.72), 0.02))
-    hm.addt(G.cbox((-L - 0.03, -0.235, zb0 + 0.32 + hb * 0.72), (L + 0.03, 0.235, zb0 + 0.32 + hb * 0.72 + 0.06), 0.015))
-    hm.addt(G.cbox((-L - 0.05, -0.27, zb0 + 0.32 + hb * 0.72 + 0.06), (L + 0.05, 0.27, zb0 + 0.32 + hb), 0.03))
-    hm.addt(G.cbox((-L, -0.215, zb0 + 0.32 + 0.05), (L, 0.215, zb0 + 0.32 + 0.11), 0.01))
-    for xx in np.arange(-L + 0.55, L - 0.4, 1.1):
-        for sy in (-1, 1):
-            crest.addt(PT.rokuyo((xx, sy * 0.19, zb0 + 0.32 + hb * 0.42), (0, sy, 0), r=0.08, seg=24))
-    for sx in (-1, 1):
-        ol = PT.onita_outline(0.86, R["onita_h"])
-        oni.addt(G.extrude_poly(ol, 0.10, (np.array([sx * (L + 0.06), 0, zb0 + 0.1]), np.array([0, sx * -1.0, 0]) * -1 if sx > 0 else np.array([0, -1.0, 0]), np.array([0, 0, 1.0])), bevel=0.015))
-        crest.addt(PT.rokuyo((sx * (L + 0.12), 0, zb0 + 0.1 + R["onita_h"] * 0.55), (sx, 0, 0), r=0.13, seg=32))
-    emit("Hakomune_BoxRidge", hm, "Doban_Rokusho_Copper", C)
-    emit("Onita_RidgeEndBoard", oni, "Doban_Rokusho_Copper", C)
-    emit("Mune_Mon_Crest", crest, "Kanagu_Gold", C)
+    if not HONG:
+        zb0 = z_apex - 0.32
+        hb = R["hakomune_h"]
+        hm.addt(G.cbox((-L, -0.19, zb0), (L, 0.19, zb0 + 0.32 + hb * 0.72), 0.02))
+        hm.addt(G.cbox((-L - 0.03, -0.235, zb0 + 0.32 + hb * 0.72), (L + 0.03, 0.235, zb0 + 0.32 + hb * 0.72 + 0.06), 0.015))
+        hm.addt(G.cbox((-L - 0.05, -0.27, zb0 + 0.32 + hb * 0.72 + 0.06), (L + 0.05, 0.27, zb0 + 0.32 + hb), 0.03))
+        hm.addt(G.cbox((-L, -0.215, zb0 + 0.32 + 0.05), (L, 0.215, zb0 + 0.32 + 0.11), 0.01))
+        for xx in np.arange(-L + 0.55, L - 0.4, 1.1):
+            for sy in (-1, 1):
+                crest.addt(PT.rokuyo((xx, sy * 0.19, zb0 + 0.32 + hb * 0.42), (0, sy, 0), r=0.08, seg=24))
+        for sx in (-1, 1):
+            ol = PT.onita_outline(0.86, R["onita_h"])
+            oni.addt(G.extrude_poly(ol, 0.10, (np.array([sx * (L + 0.06), 0, zb0 + 0.1]), np.array([0, sx * -1.0, 0]) * -1 if sx > 0 else np.array([0, -1.0, 0]), np.array([0, 0, 1.0])), bevel=0.015))
+            crest.addt(PT.rokuyo((sx * (L + 0.12), 0, zb0 + 0.1 + R["onita_h"] * 0.55), (sx, 0, 0), r=0.13, seg=32))
+        emit("Hakomune_BoxRidge", hm, "Doban_Rokusho_Copper", C)
+        emit("Onita_RidgeEndBoard", oni, "Doban_Rokusho_Copper", C)
+        emit("Mune_Mon_Crest", crest, "Kanagu_Gold", C)
 
-    # sumimune (hip ridges) + mizukiri on side-skirt top edge
-    smb = G.MB(); smo = G.MB(); mz = G.MB()
-    for sx in (-1, 1):
-        for sy in (-1, 1):
-            ds = np.linspace(0.12, dg - 0.02, 30)
-            x = sx * (Xe - ds); y = sy * (Ye - ds)
-            z = RF.z(x, y, ds, False) + 0.05
-            pts = np.stack([x, y, z], 1)
-            V, F = G.sweep(pts[::-1], G.rect_profile(R["sumimune_w"], 0.24, 0.02), mode="vertical")
-            smb.add(V, F)
-            # tip ornament (small oni)
-            dvec = G.nrm(np.array([sx, sy, 0.0]))
-            ol = PT.onita_outline(0.36, 0.42)
-            fu = np.array([-dvec[1], dvec[0], 0])
-            smo.addt(G.extrude_poly(ol, 0.06, (pts[0] + np.array([0, 0, -0.10]) + dvec * 0.03, fu, np.array([0, 0, 1.0])), bevel=0.01))
-        yy = np.linspace(-(Ye - dg), Ye - dg, 30)
-        zz = RF.z(sx * Xg, yy, dg, False) + 0.03
-        pts = np.stack([np.full_like(yy, sx * (Xg + 0.02)), yy, zz], 1)
-        V, F = G.sweep(pts, G.rect_profile(0.16, 0.12, 0.02), mode="vertical")
-        mz.add(V, F)
-    emit("Sumimune_HipRidge", smb, "Doban_Rokusho_Copper", C)
-    emit("Sumioni_HipEndBoard", smo, "Doban_Rokusho_Copper", C)
-    emit("Mizukiri_GableSkirtRidge", mz, "Doban_Rokusho_Copper", C)
+        # sumimune (hip ridges) + mizukiri on side-skirt top edge
+        smb = G.MB(); smo = G.MB(); mz = G.MB()
+        for sx in (-1, 1):
+            for sy in (-1, 1):
+                ds = np.linspace(0.12, dg - 0.02, 30)
+                x = sx * (Xe - ds); y = sy * (Ye - ds)
+                z = RF.z(x, y, ds, False) + 0.05
+                pts = np.stack([x, y, z], 1)
+                V, F = G.sweep(pts[::-1], G.rect_profile(R["sumimune_w"], 0.24, 0.02), mode="vertical")
+                smb.add(V, F)
+                # tip ornament (small oni)
+                dvec = G.nrm(np.array([sx, sy, 0.0]))
+                ol = PT.onita_outline(0.36, 0.42)
+                fu = np.array([-dvec[1], dvec[0], 0])
+                smo.addt(G.extrude_poly(ol, 0.06, (pts[0] + np.array([0, 0, -0.10]) + dvec * 0.03, fu, np.array([0, 0, 1.0])), bevel=0.01))
+            yy = np.linspace(-(Ye - dg), Ye - dg, 30)
+            zz = RF.z(sx * Xg, yy, dg, False) + 0.03
+            pts = np.stack([np.full_like(yy, sx * (Xg + 0.02)), yy, zz], 1)
+            V, F = G.sweep(pts, G.rect_profile(0.16, 0.12, 0.02), mode="vertical")
+            mz.add(V, F)
+        emit("Sumimune_HipRidge", smb, "Doban_Rokusho_Copper", C)
+        emit("Sumioni_HipEndBoard", smo, "Doban_Rokusho_Copper", C)
+        emit("Mizukiri_GableSkirtRidge", mz, "Doban_Rokusho_Copper", C)
 
     # ================================================================ 06 Tsuma (gable)
     C = "06_Tsuma_Gable"
@@ -1007,7 +1017,10 @@ def build(p):
     zbase = h00 * Zk0 + h10 * dk_j * m0 + h01 * z1 + h11 * dk_j * m1
     zbase = zbase + bump(X) * kfade(D)
     ztop = zbase + RF.lip(D) * (1 - t)
-    emit("Kohai_Yane_Doban_CopperRoof", one(slab_grid(X, Y, ztop, zbase - th)), "Doban_Rokusho_Copper", C, smooth=40)
+    if HONG:
+        emit("Kohai_Yane_Nodi_KawaraBase", one(slab_grid(X, Y, ztop, zbase - th)), "Kawara_Base", C, smooth=40)
+    else:
+        emit("Kohai_Yane_Doban_CopperRoof", one(slab_grid(X, Y, ztop, zbase - th)), "Doban_Rokusho_Copper", C, smooth=40)
     info["Zk0"] = float(Zk0)
 
     # karahafu board + side hafu + uketo gegyo
@@ -1037,6 +1050,12 @@ def build(p):
     emit("Karahafu_CurvedBargeboard", kb_, "Nuri_Shu_Vermilion", C)
     emit("Karahafu_Kanagu_GoldTrim", kbg, "Kanagu_Gold", C)
     emit("Uketo_Gegyo_Pendant", ug, "Kiji_Hinoki_Wood", C)
+
+    if HONG:
+        import roof_hongawara as RH
+        ctx = SimpleNamespace(**{k: v for k, v in locals().items() if k not in ("ctx",)})
+        ctx.slab_grid = slab_grid
+        info["kawara"] = RH.build(ctx, emit)
 
     # ================================================================ 09 En (veranda), koran, kizahashi
     C = "09_En_Veranda"
@@ -1344,18 +1363,42 @@ def export_glb(path, draco=False, image_format="AUTO"):
         bpy.ops.export_scene.gltf(**kw)
 
 
+def deep_merge(base, over):
+    out = dict(base)
+    for k, v in over.items():
+        if isinstance(v, dict) and isinstance(out.get(k), dict):
+            out[k] = deep_merge(out[k], v)
+        else:
+            out[k] = v
+    return out
+
+
+def load_variant(vid, params_path):
+    with open(params_path, encoding="utf-8") as f:
+        p = json.load(f)
+    vpath = os.path.join(HERE, "variants", "%s.json" % vid)
+    if not os.path.exists(vpath):
+        raise SystemExit("unknown variant %s (%s)" % (vid, vpath))
+    with open(vpath, encoding="utf-8") as f:
+        v = json.load(f)
+    return deep_merge(p, v.get("params", {})), v
+
+
 def main():
     global M, ROOT
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", default="haiden/out")
+    ap.add_argument("--variant", default="A-1", help="variant id (haiden/blender/variants/<id>.json)")
+    ap.add_argument("--out", default=None, help="output dir (default haiden/out/<variant>)")
     ap.add_argument("--params", default=os.path.join(HERE, "params.json"))
     ap.add_argument("--no-glb", action="store_true")
     a = ap.parse_args(sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else sys.argv[1:])
-    out = os.path.abspath(a.out)
+    out = os.path.abspath(a.out or os.path.join("haiden", "out", a.variant))
     os.makedirs(out, exist_ok=True)
     t0 = time.time()
-    with open(a.params, encoding="utf-8") as f:
-        p = json.load(f)
+    p, V = load_variant(a.variant, a.params)
+    if os.environ.get("HAIDEN_FINISH") and "kawara" in p:
+        p["kawara"]["material"] = {"rokusho": "Doban_Rokusho_Copper", "ibushi": "Kawara_Ibushi"}.get(
+            os.environ["HAIDEN_FINISH"], p["kawara"].get("material"))
 
     bpy.ops.wm.read_factory_settings(use_empty=True)
     sc = bpy.context.scene
@@ -1375,7 +1418,10 @@ def main():
     bpy.ops.wm.save_as_mainfile(filepath=blend, compress=True)
 
     stats = {
-        "name": "Haiden (拝殿) - 入母屋造・平入・桁行3間×梁間2間・1間向拝(軒唐破風)・銅板葺",
+        "id": V["id"],
+        "name": V["name"],
+        "version": V.get("version", "ver1"),
+        "title": V.get("title", ""),
         "generated": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "triangles": tris, "vertices": verts, "objects": objs,
         "materials": len(mats), "material_names": mats,
@@ -1386,6 +1432,12 @@ def main():
         "heights_m": {k: round(float(v), 3) for k, v in info["heights"].items()},
         "renders": [],
     }
+    if "kawara" in info:
+        kw = info["kawara"]
+        stats["kawara"] = {"tiles_total": kw["tiles_total"], "counts": kw["counts"],
+                           "finish": p["kawara"].get("material"), "template_tris": kw.get("template_tris")}
+        if "chidori" in kw:
+            stats["chidori"] = kw["chidori"]
     if not a.no_glb:
         tex_dir = os.path.join(out, "textures")
         tiles = bake_tiles(BAKE, tex_dir, size=512)
@@ -1413,7 +1465,8 @@ def main():
     if os.path.exists(old):
         try:
             prev = json.load(open(old, encoding="utf-8"))
-            stats["renders"] = prev.get("renders", [])
+            if prev.get("id", V["id"]) == V["id"]:
+                stats["renders"] = prev.get("renders", [])
         except Exception:
             pass
     with open(old, "w", encoding="utf-8") as f:

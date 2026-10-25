@@ -19,9 +19,14 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # One job per model variant, in parallel (A-1 ≈ 15 min, A-2 ≈ 25 min with final renders).
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [A-1, A-2]
     steps:
       - uses: actions/checkout@v4
 
@@ -43,18 +48,21 @@ jobs:
           npm install --no-save --prefix "$RUNNER_TEMP/gt" @gltf-transform/cli@4
           echo "$RUNNER_TEMP/gt/node_modules/.bin" >> "$GITHUB_PATH"
 
-      - name: Build model
-        run: python haiden/blender/build_haiden.py --out haiden/out
+      - name: Build model (${{ matrix.variant }})
+        run: python haiden/blender/build_haiden.py --variant ${{ matrix.variant }} --out haiden/out/${{ matrix.variant }}
 
-      - name: Render
+      - name: Render (${{ matrix.variant }})
         env:
           HAIDEN_QUALITY: final
-        run: python haiden/blender/render.py --out haiden/out
+        run: python haiden/blender/render.py --out haiden/out/${{ matrix.variant }}
 
       - uses: actions/upload-artifact@v4
         with:
-          name: haiden-out
-          path: haiden/out
+          name: haiden-out-${{ matrix.variant }}
+          path: |
+            haiden/out/${{ matrix.variant }}/haiden_web.glb
+            haiden/out/${{ matrix.variant }}/stats.json
+            haiden/out/${{ matrix.variant }}/renders/
           if-no-files-found: error
 
   pages:
@@ -68,8 +76,8 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: haiden-out
-          path: haiden/out
+          pattern: haiden-out-*
+          path: dl
 
       - name: Assemble _site
         run: |
@@ -85,9 +93,30 @@ jobs:
             (cd viewer && find . -type f ! -name 'index.html' ! -name 'quick.html' ! -path './test/*' ! -name '*.md' -print0) |
               while IFS= read -r -d '' f; do mkdir -p "_site/$(dirname "$f")"; cp "viewer/$f" "_site/$f"; done
           fi
-          cp haiden/out/haiden_web.glb _site/models/haiden_web.glb
-          if [ -f haiden/out/stats.json ]; then cp haiden/out/stats.json _site/models/stats.json; fi
-          if compgen -G "haiden/out/renders/*.png" > /dev/null; then cp haiden/out/renders/*.png _site/renders/; fi
+          # per-variant models / stats / renders
+          for d in dl/haiden-out-*; do
+            id="${d#dl/haiden-out-}"
+            mkdir -p "_site/models/$id" "_site/renders/$id"
+            cp "$d/haiden_web.glb" "_site/models/$id/haiden_web.glb"
+            cp "$d/stats.json" "_site/models/$id/stats.json"
+            if compgen -G "$d/renders/*.png" > /dev/null; then cp "$d"/renders/*.png "_site/renders/$id/"; fi
+          done
+          # models/index.json (newest first) + backward-compatible latest copies
+          python3 - <<'PY'
+          import json, os, re
+          ids = sorted(os.listdir("_site/models"), key=lambda s: [int(x) if x.isdigit() else x for x in re.split(r"(\d+)", s)], reverse=True)
+          ids = [i for i in ids if os.path.isfile(f"_site/models/{i}/haiden_web.glb")]
+          idx = []
+          for i in ids:
+              st = json.load(open(f"_site/models/{i}/stats.json", encoding="utf-8"))
+              idx.append({"id": i, "name": st.get("name", i), "glb": f"models/{i}/haiden_web.glb", "stats": f"models/{i}/stats.json"})
+          json.dump(idx, open("_site/models/index.json", "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+          print(json.dumps(idx, ensure_ascii=False, indent=2))
+          latest = ids[0]
+          import shutil
+          shutil.copy(f"_site/models/{latest}/haiden_web.glb", "_site/models/haiden_web.glb")
+          shutil.copy(f"_site/models/{latest}/stats.json", "_site/models/stats.json")
+          PY
           touch _site/.nojekyll
           find _site -type f | sort
 

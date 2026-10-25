@@ -25,3 +25,11 @@ python3 haiden/blender/mcp/headless_bridge.py --addon /tmp/blender-mcp/addon.py 
 - 1コマンドは同期実行(長いレンダ中は他コマンドがブロック)。
 - 公式 lab/blender_mcp(projects.blender.org)はこの環境のネットワーク許可外で未検証。
 - モデル生成本体は再現性のため `build_haiden.py`(CLI)で行い、MCPはシーン検査用途。
+
+## A-2(本瓦葺)の検査(2026-10-25)
+```bash
+python3 haiden/blender/mcp/headless_bridge.py --addon /tmp/blender-mcp/addon.py --blend haiden/out/A-2/haiden.blend --timeout 900 &
+python3 -c 'import json;print(json.dumps({"code":open("haiden/blender/mcp/inspect_kawara.py").read()}))' > /tmp/args.json
+/tmp/mcpvenv/bin/python haiden/blender/mcp/mcp_client.py --server /tmp/mcpvenv/bin/mcp-for-blender call execute_blender_code "$(cat /tmp/args.json)"
+```
+出力 `INSPECT_JSON {...}`: 瓦の枚数、浮き(>0.10m)・めり込み(<-0.03m)の件数、オブジェクト別tris、地面下オブジェクト。結果は haiden/docs/progress.md。

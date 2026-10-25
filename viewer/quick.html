@@ -519,6 +519,7 @@ if (boot.list) {
 window.viewerDebug = {
   mem: () => ({ ...renderer.info.memory }),
   cam: () => [...camera.position.toArray(), ...controls.target.toArray()],
+  setCam: (a) => { camera.position.fromArray(a); controls.target.fromArray(a, 3); atHome = false; controls.update(); invalidate(); },
 };
 </script>
 </body>

@@ -30,7 +30,7 @@ SPEC = {
     "Nuno_White":           ((0.82, 0.80, 0.76), 0.8, 0.0, "flat"),
     "Nuno_Purple":          ((0.18, 0.04, 0.22), 0.8, 0.0, "flat"),
     # A-2 本瓦葺: いぶし銀 (smoked silver-grey clay tile) / roof base (葺土・野地)
-    "Kawara_Ibushi":        ((0.075, 0.078, 0.084), 0.36, 0.42, "kawara"),
+    "Kawara_Ibushi":        ((0.090, 0.090, 0.092), 0.42, 0.28, "kawara"),
     "Kawara_Base":          ((0.035, 0.034, 0.033), 0.9, 0.0, "flat"),
     # environment only
     "Env_Gravel":           ((0.115, 0.105, 0.09), 0.9, 0.0, "gravel"),

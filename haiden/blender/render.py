@@ -26,9 +26,12 @@ from hlib import geom as G  # noqa: E402
 from hlib.materials import Mats  # noqa: E402
 
 QUALITY = {
+    "draft": dict(res=(640, 360), samples=12, bounces=3),
     "preview": dict(res=(960, 540), samples=24, bounces=4),
     "final": dict(res=(1600, 900), samples=64, bounces=6),
 }
+# A-2 has ~1M tris of glossy tiles (≈2x A-1 render time): fewer samples, OIDN denoised
+QUALITY_OVERRIDE = {"A-2": {"final": dict(samples=40)}}
 
 DEBUG_VIEWS = {
     "debug_back": ("背面(確認用)", (13.0, 15.0, 9.0), (0.0, 0.0, 4.5), 28, 40, 30, 2.4, 0.45),
@@ -49,7 +52,7 @@ VIEWS = {
 VIEWS_A2 = {
     "front_oblique": ("正面斜め", (-9.5, -16.5, 2.6), (0.4, -1.4, 4.0), 30, 38, 215, 2.4, 0.45),
     "side": ("側面", (19.0, -3.5, 3.0), (0.0, -0.8, 4.2), 32, 40, 200, 2.4, 0.45),
-    "kohai_chidori": ("向拝アップ(唐破風と千鳥破風)", (2.6, -11.6, 2.0), (0.0, -3.9, 4.55), 28, 42, 220, 2.4, 0.45),
+    "kohai_chidori": ("向拝アップ(唐破風と千鳥破風)", (2.8, -11.8, 3.3), (0.0, -3.4, 4.85), 28, 42, 220, 2.4, 0.45),
     "noki_sumi": ("軒先・隅の瓦アップ", (8.6, -7.6, 3.5), (4.55, -3.45, 4.95), 34, 40, 215, 2.4, 0.45),
     "mune_tsuma": ("棟・妻・降棟と鬼瓦", (10.5, -7.8, 9.6), (3.4, -1.2, 6.2), 34, 44, 230, 2.4, 0.45),
 }
@@ -59,6 +62,9 @@ DEBUG_VIEWS_A2 = {
     "dbg_karahafu": ("唐破風正面(確認用)", (0.0, -9.5, 4.2), (0.0, -5.0, 4.4), 35, 42, 220, 2.4, 0.45),
     "dbg_gable_foot": ("妻下・箕甲(確認用)", (8.0, -5.5, 6.2), (4.0, -2.2, 5.4), 30, 40, 215, 2.4, 0.45),
     "dbg_back": ("背面(確認用)", (13.0, 15.0, 9.0), (0.0, 0.0, 4.5), 28, 40, 30, 2.4, 0.45),
+    "dbg_noki_macro": ("軒先マクロ(確認用)", (3.0, -5.4, 4.25), (2.4, -3.9, 4.55), 40, 40, 215, 2.4, 0.45),
+    "dbg_sumi_macro": ("隅マクロ(確認用)", (6.9, -5.9, 5.0), (4.85, -3.65, 5.05), 35, 40, 215, 2.4, 0.45),
+    "dbg_kohai_side": ("向拝側面の取合い(確認用)", (5.8, -7.8, 4.8), (1.9, -3.6, 4.7), 30, 40, 215, 2.4, 0.45),
 }
 VIEW_SETS = {"A-1": (VIEWS, DEBUG_VIEWS), "A-2": (VIEWS_A2, DEBUG_VIEWS_A2)}
 
@@ -246,10 +252,12 @@ def main():
     a = ap.parse_args(sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else sys.argv[1:])
     out = os.path.abspath(a.out)
     q = os.environ.get("HAIDEN_QUALITY", "preview")
-    Q = QUALITY.get(q, QUALITY["preview"])
+    Q = dict(QUALITY.get(q, QUALITY["preview"]))
     bpy.ops.wm.open_mainfile(filepath=os.path.join(out, "haiden.blend"))
     stats_path = os.path.join(out, "stats.json")
     stats = json.load(open(stats_path, encoding="utf-8")) if os.path.exists(stats_path) else {}
+    # per-variant render budget (CI: all final renders together within 60 min)
+    Q.update(QUALITY_OVERRIDE.get(stats.get("id", "A-1"), {}).get(q, {}))
     build_env(stats)
 
     sc = bpy.context.scene

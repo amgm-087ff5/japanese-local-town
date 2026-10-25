@@ -39,3 +39,24 @@
 - さらに PyPI 相当のMCPサーバー(`mcp-for-blender`, stdio)を venv に入れ、自作の最小MCPクライアント `mcp_client.py` から `get_scene_info` / `execute_blender_code` の往復に成功。
 - 使い方: 最終 haiden.blend を開いたブリッジに MCP 経由で execute_blender_code を送り、コレクション別オブジェクト数・地面下めり込み(z<-0.01)を検査 → 問題なし。モデリング本体は再現性のためCLI(build_haiden.py)。手順は haiden/blender/mcp/README.md。
 - 判断: GUI依存ツール(viewport screenshot)は不可、長時間レンダは同期ブロック。CIではMCP不要のためCLIのみ。
+
+## 5. 本瓦葺(A-2)調査(調査日: 2026-10-25)
+| 項目 | 内容 | 出典 |
+|---|---|---|
+| 本瓦葺の構成 | 凹形の平瓦(女瓦)を先に葺き、継ぎ目を半円筒の丸瓦(男瓦)で覆う。軒先から葺き上げる。軒平瓦・軒丸瓦は雨水を切る瓦当を持つ。棟・棟端・けらば・隅には別形の役物を用いる | [JAANUS hongawarabuki](https://www.aisf.or.jp/~jaanus/deta/h/hongawarabuki.htm) / [GSJ 地質ニュース(瓦)](https://www.gsj.jp/data/chishitsunews/99_04_06.pdf) |
+| 平瓦寸法・葺足 | 定寸なし。平均で広端幅 約30cm・長さ 約40cm、葺足は3枚重ねで約15cm(約2/3が覆われる) | [JAANUS fukiashi](https://aisf.or.jp/~jaanus/deta/f/fukiashi.htm) |
+| 瓦の厚さ | 一般に 15〜20mm | [GSJ 地質ニュース](https://www.gsj.jp/data/chishitsunews/99_04_06.pdf) |
+| 丸瓦寸法 | 径 約15cm前後・長さ 約35cm・玉縁 5〜6cm(一般知識による目安 **要確認**) | 要確認 |
+| 冠瓦(雁振瓦) | 大棟・降棟・稚児棟の熨斗瓦積みの頂部を覆う、わずかに凸の瓦。別名 伏間瓦・冠瓦 | [JAANUS ganburigawara](https://aisf.or.jp/~jaanus/deta/g/ganburigawara.htm) / [伏間瓦](https://projects.mcah.columbia.edu/jaanus/record/fusumagawara) |
+| 棟瓦 | 社寺は角桟伏間瓦(角ばる縁)、民家は箱冠瓦(丸桟) | [JAANUS munegawara](https://aisf.or.jp/~jaanus/deta/m/munegawara.htm) |
+| 稚児棟 | 入母屋・寄棟の隅で、隅降棟の外側(下)に続く短い棟。軒先近くまで延び、先端は「一の鬼」。隅棟の端は鬼瓦または獅子口で「二の鬼」 | [JAANUS chigomune](https://projects.mcah.columbia.edu/jaanus/node/4975) |
+| 熨斗瓦の段数 | 奇数段(3・5・7…)とするのが通例、棟の格で増やす(一般知識 **要確認**) | 要確認 |
+| 獅子口 | 経の巻(3本の筒)と綾筋を持つ棟端飾り。檜皮葺・神社系の意匠で、瓦葺の神社でも大棟端に用いる(一般知識 **要確認**) | 要確認 |
+| 千鳥破風 | 屋根の流れ面に載せた三角形の小破風(棟は大屋根の流れに突き当たる)。両脇は大屋根との谷になる。妻飾り(懸魚・木連格子)を持つ(一般知識 **要確認**) | 要確認 |
+
+### A-2 採用値(spec.md A-2 節と同じ)
+- 平瓦: 長さ0.40・広端幅0.27・狭端幅0.25・反り(凹)0.028・厚0.018、葺足0.135(3枚重ね)
+- 丸瓦: 長さ0.36(玉縁0.055)・外径0.156(R0.078)・厚0.016、葺足0.305
+- 瓦割(丸瓦芯々)0.27。軒瓦の出 0.08(瓦座より前へ)
+- 大棟 熨斗7段+冠瓦、降棟・隅棟 5段、稚児棟 3段、雨押え 2段、唐破風棟 2段、千鳥破風棟 5段・同降棟 3段
+- 棟端: 大棟=獅子口、降棟・千鳥破風・唐破風=鬼瓦(雲形鬼板+巴+鳥衾)、隅棟=二の鬼、稚児棟=一の鬼、隅の軒先=巴蓋

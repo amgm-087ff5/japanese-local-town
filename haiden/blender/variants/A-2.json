@@ -14,30 +14,30 @@
     },
     "kawara": {
       "material": "Kawara_Ibushi",
-      "pitch": 0.27,
+      "pitch": 0.28,
       "hira_L": 0.4,
-      "hira_W0": 0.27,
-      "hira_W1": 0.25,
+      "hira_W0": 0.28,
+      "hira_W1": 0.26,
       "hira_sag": 0.028,
       "hira_t": 0.018,
       "hira_ashi": 0.135,
       "maru_L": 0.36,
       "maru_tama": 0.055,
-      "maru_R": 0.078,
-      "maru_t": 0.016,
-      "maru_w0": 0.055,
+      "maru_R": 0.07,
+      "maru_t": 0.015,
+      "maru_w0": 0.052,
       "noki_proj": 0.08,
       "hip_overlap": 0.07,
-      "valley_gap": 0.05,
+      "valley_gap": 0.07,
       "chidori_foot_gap": 0.03,
       "sode_inset": 0.075,
-      "omune_base": 0.06,
+      "omune_base": 0.0,
       "omune": {
         "layers": 7,
         "w0": 0.5,
         "hn": 0.046,
-        "inset": 0.012,
-        "base_h": 0.08,
+        "inset": 0.014,
+        "base_h": 0.05,
         "shishi_W": 0.66
       },
       "kudari": {
@@ -76,7 +76,7 @@
         "oni_H": 0.4
       },
       "chidori_mune": {
-        "tail": 0.4,
+        "tail": 0.1,
         "layers": 5,
         "w0": 0.36,
         "hn": 0.042,
@@ -99,18 +99,18 @@
     },
     "chidori": {
       "enabled": true,
-      "halfw": 1.6,
-      "d_front": 1.4,
+      "halfw": 1.8,
+      "d_front": 1.25,
       "overhang": 0.38,
-      "raise": 0.1,
+      "raise": 0.12,
       "thick": 0.1,
-      "slope_eave": 0.55,
-      "slope_ridge": 1.0,
+      "slope_eave": 0.6,
+      "slope_ridge": 0.9,
       "slope_pow": 1.4,
       "hafu_h": 0.3,
       "hafu_h_end": 0.17,
-      "gegyo_W": 0.62,
-      "gegyo_H": 0.6
+      "gegyo_W": 0.5,
+      "gegyo_H": 0.5
     }
   }
 }

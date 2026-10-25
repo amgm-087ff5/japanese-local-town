@@ -150,8 +150,9 @@ class QuietHandler(http.server.SimpleHTTPRequestHandler):
 
 
 class Runner:
-    def __init__(self, br, base, out, prefix, pkg, ver, reqlog):
+    def __init__(self, br, base, out, prefix, pkg, ver, reqlog, allow_404=()):
         self.br, self.base, self.out, self.prefix, self.pkg, self.ver, self.reqlog = br, base, out, prefix, pkg, ver, reqlog
+        self.allow_404 = allow_404   # 想定内の 404(legacy の models/index.json 探索)
         self.ok = True
 
     def open(self, path, mobile, w, h):
@@ -160,7 +161,14 @@ class Runner:
             install_mock_cdn(ctx, self.pkg, self.ver)
         pg = ctx.new_page()
         errors = []
-        pg.on('console', lambda m, e=errors: m.type == 'error' and e.append(m.text))
+        def on_console(m, e=errors):
+            if m.type != 'error':
+                return
+            url = (m.location or {}).get('url', '')
+            if '404' in m.text and any(url.endswith(x) for x in self.allow_404):
+                return
+            e.append(m.text + (f' ({url})' if url else ''))
+        pg.on('console', on_console)
         pg.on('pageerror', lambda ex, e=errors: e.append('pageerror: ' + str(ex)))
         self.reqlog.clear()
         pg.goto(self.base + path, wait_until='load')
@@ -181,7 +189,10 @@ class Runner:
 
     def shot(self, pg, name):
         p = self.out / f'{self.prefix}_{name}.png'
-        pg.screenshot(path=str(p))
+        # quick 版の自動回転は止めて静止画で撮る(実物の重い GLB だと SwiftShader で毎フレーム描画が追いつかない)
+        if pg.locator('#btnRotate[aria-pressed="true"]').count() and pg.locator('#tabs, #variants').count():
+            pg.click('#btnRotate'); pg.wait_for_timeout(800)
+        pg.screenshot(path=str(p), timeout=180000)
         return p
 
 
@@ -199,6 +210,18 @@ def run_legacy(r: Runner):
                 good &= tabs_hidden
             r.report(good, f'legacy {sname} {path}', shot, f'tris={st and st.get("tris")} errors={errors} {extra}')
             ctx.close()
+
+
+def settle(pg, tries=40):
+    """OrbitControls の減衰(慣性)が収まるまで待ってカメラ値を返す。"""
+    prev = pg.evaluate('viewerDebug.cam()')
+    for _ in range(tries):
+        pg.wait_for_timeout(500)
+        cur = pg.evaluate('viewerDebug.cam()')
+        if max(abs(a - b) for a, b in zip(prev, cur)) < 1e-3:
+            return cur
+        prev = cur
+    return prev
 
 
 def run_variants(r: Runner, index):
@@ -232,15 +255,11 @@ def run_variants(r: Runner, index):
         ctx.close()
         ctx, pg, errors = r.open('/', mobile, w, h)
         mem_a2 = pg.evaluate('viewerDebug.mem()')
-        # ドラッグで視点を変える(自動回転も止まる)
-        box = pg.locator('#stage canvas').bounding_box()
-        cx, cy = box['x'] + box['width'] / 2, box['y'] + box['height'] * 0.6
-        if mobile:
-            pg.click('#btnRotate')   # タッチのドラッグは合成しづらいので回転停止のみ
-        else:
-            pg.mouse.move(cx, cy); pg.mouse.down(); pg.mouse.move(cx - 160, cy - 40, steps=8); pg.mouse.up()
-        pg.wait_for_timeout(1500)
-        cam0 = pg.evaluate('viewerDebug.cam()')
+        # 自動回転を止め、ホームとは違う視点にする(ドラッグの慣性は低 fps だと長く残るので直接設定)
+        pg.click('#btnRotate')
+        c = pg.evaluate('viewerDebug.cam()')
+        pg.evaluate('(c) => viewerDebug.setCam(c)', [-c[2] * 0.8, c[1] * 0.6, c[0] * 0.8, c[3], c[4] * 0.9, c[5]])
+        cam0 = settle(pg)
         pg.click('.tab[data-id="A-1"]')
         r.wait_loaded(pg, errors, 'window.viewerState.current === "A-1"')
         cam1 = pg.evaluate('viewerDebug.cam()')
@@ -248,7 +267,9 @@ def run_variants(r: Runner, index):
         url1 = pg.url
         rsrc = pg.eval_on_selector_all('#renders img', 'els => els.map(e => e.getAttribute("src"))')
         shot = r.shot(pg, f'switch_A-1_{sname}')
-        same = max(abs(a - b) for a, b in zip(cam0, cam1)) < 1e-3
+        # OrbitControls の減衰が低 fps でゆっくり残るので、距離の 2% 以内なら「維持」とみなす
+        dist = sum((cam0[i] - cam0[i + 3]) ** 2 for i in range(3)) ** 0.5
+        same = max(abs(a - b) for a, b in zip(cam0, cam1)) < dist * 0.02
         good = same and url1.endswith('?m=A-1') and mem1 == mem_a1 and all('renders/A-1/' in s for s in rsrc) and not errors
         r.report(good, f'switch {sname} A-2→A-1 (同じ視点 ON)', shot,
                  f'cam_kept={same} url={url1} mem_before={mem_a2} mem_after={mem1} mem_fresh_A1={mem_a1} renders={rsrc} errors={errors}')
@@ -258,7 +279,7 @@ def run_variants(r: Runner, index):
         r.wait_loaded(pg, errors, 'window.viewerState.current === "A-2"')
         cam2 = pg.evaluate('viewerDebug.cam()')
         mem2 = pg.evaluate('viewerDebug.mem()')
-        moved = max(abs(a - b) for a, b in zip(cam1, cam2)) > 1e-3
+        moved = max(abs(a - b) for a, b in zip(cam1, cam2)) > dist * 0.05
         shot = r.shot(pg, f'switch_back_A-2_{sname}')
         good = (moved or mobile) and pg.url.endswith('?m=A-2') and mem2 == mem_a2 and not errors
         r.report(good, f'switch {sname} A-1→A-2 (同じ視点 OFF)', shot, f'cam_reset={moved} url={pg.url} mem={mem2} errors={errors}')
@@ -316,7 +337,8 @@ def main() -> int:
             handler = type('H', (QuietHandler,), {'log_requests': reqlog})
             srv = http.server.ThreadingHTTPServer(('127.0.0.1', 0), functools.partial(handler, directory=str(site)))
             threading.Thread(target=srv.serve_forever, daemon=True).start()
-            r = Runner(br, f'http://127.0.0.1:{srv.server_address[1]}', out, a.prefix, pkg, ver, reqlog)
+            r = Runner(br, f'http://127.0.0.1:{srv.server_address[1]}', out, a.prefix, pkg, ver, reqlog,
+                       allow_404=('/models/index.json',) if layout == 'legacy' else ())
             print(f'== {layout} ==')
             run_variants(r, index) if layout == 'variants' else run_legacy(r)
             ok &= r.ok

@@ -378,7 +378,7 @@ def path_frames(P):
 
 
 def ridge(parts, P, n_layers=5, w0=0.40, hn=0.044, inset=0.010, base_h=0.075, bury=0.20,
-          lp=0.27, gap=0.006, droop=0.010, kan=True, kan_r=None, kan_flat=0.8, counts=None, key="ridge",
+          lp=0.27, gap=0.008, droop=0.016, kan=True, kan_r=None, kan_flat=0.8, counts=None, key="ridge",
           end_pad=(0.0, 0.0)):
     """熨斗積み棟: 面戸(漆喰)+ 熨斗瓦 n段(左右割熨斗, 目地) + 冠瓦(雁振瓦).
     P: dense centre line at the tile-top level. parts: dict of geom.MB by role
@@ -411,7 +411,7 @@ def ridge(parts, P, n_layers=5, w0=0.40, hn=0.044, inset=0.010, base_h=0.075, bu
         p0, s0 = _at_ext(col, a0)
         p1, s1 = _at_ext(col, a1)
         c_in, c_out = 0.003, wi / 2
-        hh = hn - 0.007
+        hh = hn - 0.011
         corners = []
         for (pp, ss) in ((p0, s0), (p1, s1)):
             for (c, dz) in ((c_in, 0.0), (c_out, -droop)):
@@ -526,10 +526,10 @@ def oni(mb, origin, facing, W=0.55, H=0.60, t=0.10, toribusuma=True, crest="tomo
     if toribusuma:
         # 鳥衾: curved round tile projecting forward over the oni top
         zt = ridge_top if ridge_top is not None else o[2] + H * 0.85
-        p0 = o - f * 0.35 + Z * (zt - o[2] - 0.02)
-        p3 = o + f * 0.30 + Z * (H * 1.08)
-        bz = G.bezier(p0, p0 + f * 0.30, p3 - f * 0.25 - Z * 0.05, p3, 14)
-        r = 0.065 if W > 0.4 else 0.045
+        p0 = o - f * 0.25 + Z * (zt - o[2] - 0.03)
+        p3 = o + f * 0.16 + Z * (H * 0.98)
+        bz = G.bezier(p0, p0 + f * 0.18, p3 - f * 0.12 - Z * 0.03, p3, 12)
+        r = 0.042 if W > 0.4 else 0.03
         V4, F4 = G.sweep(bz, G.circle_profile(r, 12), mode="normal")
         mb.add(V4, F4)
         tdir = G.nrm(bz[-1] - bz[-2])

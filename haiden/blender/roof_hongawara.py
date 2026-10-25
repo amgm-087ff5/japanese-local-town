@@ -75,6 +75,12 @@ def build(c, emit):
         d = np.where(upper, ay, np.minimum(ax, ay))
         return Z0 + Fext(d) + RF.S(x, y)
 
+    def zside(x, y):
+        """lower hip-roof surface only (the 妻側 slopes run on under the gable overhang)."""
+        x = np.asarray(x, float); y = np.asarray(y, float)
+        d = np.minimum(Xe - np.abs(x), Ye - np.abs(y))
+        return Z0 + Fext(d) + RF.S(x, y)
+
     def zk(x, y):
         x = np.asarray(x, float); y = np.asarray(y, float)
         dk = y - yke
@@ -201,7 +207,7 @@ def build(c, emit):
             a = abs(s)
             if a > A_e - 0.02:
                 continue
-            zf = zm
+            zf = zm if axis == "x" else zside
             ivals = []          # (d0, d1, eave, cuts)
             if axis == "x":
                 if a <= Xg:
@@ -377,7 +383,7 @@ def build(c, emit):
     ao = KP["amaosae"]
     for sx in (-1, 1):
         yy = np.linspace(-(Ye - dg - ao["end"]), Ye - dg - ao["end"], 40)
-        P = surf_path(np.stack([np.full_like(yy, sx * (Xg + ao["off"])), yy], 1), zm)
+        P = surf_path(np.stack([np.full_like(yy, sx * (Xg + ao["off"])), yy], 1), zside)
         KW.ridge(ridge_parts, P, n_layers=ao["layers"], w0=ao["w0"], hn=0.04, inset=0.01, base_h=0.05,
                  counts=counts, key="amaosae")
 
@@ -407,7 +413,7 @@ def build(c, emit):
     emit("Kawara_Mune_Ganburi_Cap", MB["kanmuri"], MAT, C, smooth=50)
     emit("Kawara_Mune_Mendo_Shikkui", MB["mendo"], "Shikkui_Plaster", C, smooth=20)
     emit("Kawara_Onigawara_Shishiguchi_Tomoebuta", MB["oni"], MAT, C, smooth=40)
-    emit("Kawaraza_EaveTileBoard", MB["kawaraza"], "Kiji_Hinoki_Wood", C, smooth=20)
+    emit("Kawaraza_EaveTileBoard", MB["kawaraza"], "Nuri_Shu_Vermilion", C, smooth=20)
     if ch is not None:
         C2 = "11_Chidori_Hafu"
         emit("Chidori_Yane_Base", MB["ch_slab"], "Kawara_Base", C2, smooth=40)

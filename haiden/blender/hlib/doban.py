@@ -388,7 +388,12 @@ class Roof:
         xy = np.concatenate(pts)
         z = ura_top + self.RF.S(xy[:, 0], xy[:, 1])
         P = np.stack([xy[:, 0], xy[:, 1], z], 1)
-        mb.addt(G.sweep(P, prof, mode="vertical"))
+        V, F = G.sweep(P, prof, mode="vertical")
+        # 反り per vertex (not per path point): near the corners the inner part follows the 裏甲 below
+        k = len(prof)
+        V = V.copy()
+        V[:, 2] += self.RF.S(V[:, 0], V[:, 1]) - np.repeat(self.RF.S(xy[:, 0], xy[:, 1]), k)
+        mb.add(V, F)
 
     def nobori(self, mb, a_end):
         c = self.c
@@ -411,6 +416,8 @@ class Kohai:
     def __init__(self, ctx, c, roof):
         self.x = ctx; self.c = c; self.roof = roof
         self.Wk = ctx.Wk
+        # the 唐破風板 projects t + 登り裏甲 in front of the eave line: the 軒付 and the roof edge sit forward of it
+        self.sh = c["kara_t"] + c["hafu"]["p1"] + 0.01
         dks = np.linspace(0, ctx.dk_j + 0.3, 3000)
         zz = self.zbase(np.zeros_like(dks), dks)
         self.arc = Arc(dks, np.gradient(zz, dks))
@@ -445,7 +452,7 @@ class Kohai:
     def mesh(self, acc):
         X = self.x; c = self.c
         Wk = self.Wk
-        rows = rows_with_steps(c, self.arc, 0.0, X.dk_j + 0.06, extra=[X.dk_j], base=0.06)
+        rows = rows_with_steps(c, self.arc, -self.sh, X.dk_j + 0.06, extra=[0.0, X.dk_j], base=0.06)
         xs = list(np.linspace(-Wk, Wk, int(math.ceil(2 * Wk / 0.04)) + 1))
         for o in VERGE_OFF[:12]:
             xs += [-Wk + o, Wk - o]
@@ -474,7 +481,7 @@ class Kohai:
         xe = self.Wk + 0.11
         xs = np.unique(np.concatenate([np.linspace(-xe, xe, 241), [-X.kh_w, X.kh_w]]))
         z = X.EK_ura_top + X.bump(xs)
-        P = np.stack([xs, np.full_like(xs, X.yke), z], 1)
+        P = np.stack([xs, np.full_like(xs, X.yke - self.sh), z], 1)
         mb.addt(G.sweep(P, prof, mode="vertical"))
         return H
 

@@ -19,15 +19,15 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # One job per model variant, in parallel (A-1 ≈ 15 min, A-2v1 ≈ 25 min, A-2 ver2 ≈ 35 min with
-  # texture bake + 6 final renders). A-1 / A-2v1 are frozen (ver1); A-2 = 拝殿A-2 ver2 (3 finishes).
+  # One job per model variant, in parallel. A-1 = 拝殿A-1 ver2 (銅板一文字葺, 3 finishes); A-2 = 拝殿A-2 ver2
+  # (3 finishes); A-2v1 / A-1v1 are frozen (ver1, 丹塗のみ).
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        variant: [A-1, A-2v1, A-2]
+        variant: [A-1, A-2, A-2v1, A-1v1]
     steps:
       - uses: actions/checkout@v4
 
@@ -108,7 +108,7 @@ jobs:
           ids = [i for i in os.listdir("_site/models") if os.path.isfile(f"_site/models/{i}/haiden_web.glb")]
           st_of = {i: json.load(open(f"_site/models/{i}/stats.json", encoding="utf-8")) for i in ids}
           # newest first: explicit order; unknown ids after them by stats "seq" (desc), then natural id order
-          ORDER = ["A-2", "A-2v1", "A-1"]
+          ORDER = ["A-1", "A-2", "A-2v1", "A-1v1"]
           nat = lambda s: [int(x) if x.isdigit() else x for x in re.split(r"(\d+)", s)]
           rest = sorted([i for i in ids if i not in ORDER], key=lambda i: (st_of[i].get("seq", 0), nat(i)), reverse=True)
           ids = [i for i in ORDER if i in ids] + rest

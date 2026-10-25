@@ -108,3 +108,16 @@ Kidan_Platform, Soseki_Base, Kamebara, Hashira_Pillar, Nageshi_Ji/Uchi, Kashiran
 - GLB: Blender 出力時に KHR_materials_variants(variants: nuri, shiraki, koshoku。既定=丹塗)。その後 gltf-transform で WebP(EXT_texture_webp, q82)+ Draco。three.js r170 の GLTFLoader で読込・`parser.getDependency('material', i)` による切替を確認
 - stats.json: `"finishes"`, `"finish_mode": "khr_variants"`, `"uv_mode"`, `"texture_size"`, `"textured_materials"`
 - ビューアでの切替: `gltf.parser.json.extensions.KHR_materials_variants.variants` の名前 → 各メッシュの `userData.gltfExtensions.KHR_materials_variants.mappings` から該当 material を `parser.getDependency('material', idx)` で読み込み差し替える(three.js 例 webgl_loader_gltf_variants と同じ方式)
+
+---
+
+# 拝殿A-1 ver2(銅板一文字葺の作り直し + 仕上げ3種)
+
+- 生成: `python3 haiden/blender/build_haiden.py --variant A-1 --out haiden/out/A-1`。定義 `variants/A-1.json`。ver1 は `variants/A-1v1.json`(凍結、丹塗のみ)
+- 屋根: 銅板一文字葺を連続メッシュで作り直し(`doban_v2`)。隅棟・降棟なし、隅は丸く反り上がる
+- 妻: 箕甲のむくり(けらば)
+- 軒先: 軒付3段(唐破風は4段)+水切り。軒先は銅板包み
+- 破風板: 見付0.24m、厚0.045m(ver1 は 0.32m)。A-2 ver2 の `hafu_detail` を適用
+- 唐破風板: 金具と六葉を付与
+- UV: 木目UV・1Kテクスチャ。仕上げ3種(丹塗/白木/古色、KHR_materials_variants)
+- 根拠: `haiden/docs/research_copper.md`。隅棟・降棟の有無は research_copper.md §3 で要確認

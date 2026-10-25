@@ -41,3 +41,6 @@ python3 -c 'import json;print(json.dumps({"code":open("haiden/blender/mcp/inspec
 /tmp/mcpvenv/bin/python haiden/blender/mcp/mcp_client.py --server /tmp/mcpvenv/bin/mcp-for-blender call execute_blender_code "$(cat /tmp/args.json)"
 ```
 出力 `INSPECT_JSON {...}`: 破風金具の島ごとの浮き、UVMap の有無、木目方向の一致度、仕上げ材質の欠落。結果は haiden/docs/progress.md。
+
+## A-1 ver2(銅板葺)の検査
+`inspect_doban.py` は銅板部材の浮き(>10mm)・めり込み(<-20mm)、軒先・破風の接触、隅棟の有無、UVの有無を調べる。上の inspect_hafu.py と同じ手順で `--blend haiden/out/A-1/haiden.blend` に対して `mcp_client.py ... call execute_blender_code` に `{"code": ...}` として渡す(出力 `INSPECT_JSON {...}`)。結果は haiden/docs/progress.md。

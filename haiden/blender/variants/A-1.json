@@ -1,10 +1,44 @@
 {
   "id": "A-1",
-  "name": "拝殿A-1 ver1",
-  "version": "ver1",
-  "seq": 1,
-  "title": "入母屋造・平入・桁行3間×梁間2間・1間向拝(軒唐破風)・銅板段葺・丹塗",
-  "frozen_commit": "7b7b936",
-  "_note": "params.json をそのまま使う(差分なし)。A-1 ver1 は凍結。",
-  "params": {}
+  "name": "拝殿A-1 ver2",
+  "version": "ver2",
+  "seq": 4,
+  "title": "入母屋造・平入・桁行3間×梁間2間・1間向拝(軒唐破風)・銅板一文字葺(箕甲・軒付3段・隅棟なし)・仕上げ3種(丹塗/白木/古色)",
+  "_note": "A-1 ver1(=A-1v1)からの変更: 屋根を高解像度の銅板一文字葺に作り直し(doban_v2: 隅棟なし・隅は丸く反り上がる、妻は箕甲のむくり、軒先は銅板包みの軒付3段+水切り、唐破風の軒付4段)、破風板を薄く(hafu_h 0.32→0.24)、A-2 ver2 の破風板作り込み(hafu_detail)、木目UV・1Kテクスチャ・仕上げ3種。根拠 haiden/docs/research_copper.md, spec.md A-1 ver2 節。",
+  "params": {
+    "roof": {
+      "nokitsuke_t": 0.24,
+      "thick": 0.05,
+      "step_lip": 0.0,
+      "step_len": 50.0,
+      "hafu_h": 0.24,
+      "hafu_t": 0.055
+    },
+    "doban_v2": {
+      "enabled": true
+    },
+    "hafu_detail": {
+      "enabled": true,
+      "karahafu_h": 0.27
+    },
+    "render": {
+      "uv_mode": "grain",
+      "tex_size": 1024,
+      "materials_v2": true
+    },
+    "finishes": [
+      {
+        "id": "nuri",
+        "name": "丹塗"
+      },
+      {
+        "id": "shiraki",
+        "name": "白木"
+      },
+      {
+        "id": "koshoku",
+        "name": "古色"
+      }
+    ]
+  }
 }

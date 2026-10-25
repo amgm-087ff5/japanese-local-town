@@ -66,6 +66,17 @@ def emit(name, mb, mat, cname, smooth=32.0):
     return ob
 
 
+def emit_me(name, me, mat, cname, smooth=32.0):
+    """Emit a prebuilt bpy mesh (A-1 ver2 copper roof: per-loop UV aligned with the 一文字葺 rows)."""
+    me.materials.append(M[mat])
+    if smooth:
+        me.shade_smooth()
+        me.set_sharp_from_angle(angle=math.radians(smooth))
+    ob = bpy.data.objects.new(name, me)
+    coll(cname).objects.link(ob)
+    return ob
+
+
 def one(vf):
     return G.MB().addt(vf)
 
@@ -262,6 +273,12 @@ def build(p):
     HD = HD if HD.get("enabled") else None
     if HD:
         from hlib import hafu as HF
+    # A-1 ver2: 銅板一文字葺 (rounded hips, 箕甲, stepped 軒付) - hlib/doban.py
+    DV2 = bool((p.get("doban_v2") or {}).get("enabled"))
+    if DV2:
+        from hlib import doban as DB
+        DC = DB.cfg_of(p)
+        DC["hafu"]["t"] = R["hafu_t"]
 
     # ---------------------------------------------------------------- heights
     z_kidan = p["kidan_h"]
@@ -747,7 +764,7 @@ def build(p):
         X, Y, D = grid_patch(rows, rngf, ncol, mapxy)
         mb.addt(slab_grid(X, Y, zt(X, Y, D), zb(X, Y, D)))
 
-    for side in SIDES:
+    for side in (SIDES if not DV2 else ()):
         ax, sg = SIDES[side]
         A_e = Xe if ax == "x" else Ye   # along half-length at eave
         Wd = Ye if ax == "x" else Xe
@@ -777,12 +794,27 @@ def build(p):
     HONG = R.get("type", "doban") == "hongawara"
     if HONG:
         emit("Yane_Nodi_KawaraBase", roof, "Kawara_Base", C, smooth=40)
+    elif DV2:
+        # 大屋根 ring (rounded hips, no 隅棟) + 入母屋の妻 (箕甲) + 軒付 + 登り軒付
+        DR = DB.Roof(SimpleNamespace(RF=RF, Xe=Xe, Ye=Ye, Z0=Z0, dg=dg, Xg=Xg, ho=ho, Wk=Wk, d_j=d_j), DC)
+        acc = DB.Acc(); DR.ring_mesh(acc)
+        emit_me("Yane_Doban_Ichimonji_Main", acc.to_mesh("Yane_Doban_Ichimonji_Main"), DB.MAT_ROOF, C, smooth=40)
+        acc = DB.Acc(); DR.gable_mesh(acc)
+        emit_me("Yane_Doban_Ichimonji_Tsuma", acc.to_mesh("Yane_Doban_Ichimonji_Tsuma"), DB.MAT_ROOF, C, smooth=40)
+        nk = G.MB(); DR.nokitsuke(nk, E.ura_top)
+        emit("Nokitsuke_Doban_EaveStack", nk, DB.MAT_TRIM, C, smooth=20)
+        hafu_a_end = DR.hafu_end(R["hafu_h"], DC["hafu"])
+        nb = G.MB(); DR.nobori(nb, hafu_a_end + 0.02)
+        emit("Nobori_Nokitsuke_Doban_Verge", nb, DB.MAT_TRIM, C, smooth=20)
+        info["doban_v2"] = dict(foot_gap=round(DR.G_foot, 4), hafu_a_end=round(hafu_a_end, 3),
+                                gable_half=round(Ye - dg, 3), ring_rows=int(len(DR.ring_rows)))
     else:
         emit("Yane_Doban_CopperRoof", roof, "Doban_Rokusho_Copper", C, smooth=40)
 
     # hakomune (box ridge) + onita
     hm = G.MB(); crest = G.MB(); oni = G.MB()
     L = Xg + ho + 0.04
+    CU = DB.MAT_TRIM if DV2 else "Doban_Rokusho_Copper"
     if not HONG:
         zb0 = z_apex - 0.32
         hb = R["hakomune_h"]
@@ -797,14 +829,15 @@ def build(p):
             ol = PT.onita_outline(0.86, R["onita_h"])
             oni.addt(G.extrude_poly(ol, 0.10, (np.array([sx * (L + 0.06), 0, zb0 + 0.1]), np.array([0, sx * -1.0, 0]) * -1 if sx > 0 else np.array([0, -1.0, 0]), np.array([0, 0, 1.0])), bevel=0.015))
             crest.addt(PT.rokuyo((sx * (L + 0.12), 0, zb0 + 0.1 + R["onita_h"] * 0.55), (sx, 0, 0), r=0.13, seg=32))
-        emit("Hakomune_BoxRidge", hm, "Doban_Rokusho_Copper", C)
-        emit("Onita_RidgeEndBoard", oni, "Doban_Rokusho_Copper", C)
+        emit("Hakomune_BoxRidge", hm, CU, C)
+        emit("Onita_RidgeEndBoard", oni, CU, C)
         emit("Mune_Mon_Crest", crest, "Kanagu_Gold", C)
 
         # sumimune (hip ridges) + mizukiri on side-skirt top edge
+        # (A-1 ver2: no 隅棟 - copper/檜皮葺 hips are rounded, research.md §7)
         smb = G.MB(); smo = G.MB(); mz = G.MB()
         for sx in (-1, 1):
-            for sy in (-1, 1):
+            for sy in ((-1, 1) if not DV2 else ()):
                 ds = np.linspace(0.12, dg - 0.02, 30)
                 x = sx * (Xe - ds); y = sy * (Ye - ds)
                 z = RF.z(x, y, ds, False) + 0.05
@@ -821,16 +854,26 @@ def build(p):
             pts = np.stack([np.full_like(yy, sx * (Xg + 0.02)), yy, zz], 1)
             V, F = G.sweep(pts, G.rect_profile(0.16, 0.12, 0.02), mode="vertical")
             mz.add(V, F)
-        emit("Sumimune_HipRidge", smb, "Doban_Rokusho_Copper", C)
-        emit("Sumioni_HipEndBoard", smo, "Doban_Rokusho_Copper", C)
-        emit("Mizukiri_GableSkirtRidge", mz, "Doban_Rokusho_Copper", C)
+        emit("Sumimune_HipRidge", smb, CU, C)
+        emit("Sumioni_HipEndBoard", smo, CU, C)
+        emit("Mizukiri_GableSkirtRidge", mz, CU, C)
 
     # ================================================================ 06 Tsuma (gable)
     C = "06_Tsuma_Gable"
     hf = G.MB(); gb = G.MB(); kg = G.MB(); tb = G.MB(); gk = G.MB(); hk = G.MB()
     for sx in (-1, 1):
         xh = sx * (Xg + ho + R["hafu_t"] / 2 - 0.01)
-        if HD:
+        if HD and DV2:
+            # A-1 ver2: thinner profiled board under the 登り軒付; top follows the 箕甲 verge; 破風尻 clears the lower roof
+            for sy in (-1, 1):
+                def ztf(a):
+                    return DR.VT(Ye - np.abs(np.asarray(a, float))) - DC["nobori_t"]
+                bd = HF.Board((sx * (Xg + ho - 0.01), 0, 0), (0, sy, 0), (sx, 0, 0), 0.0, hafu_a_end, ztf,
+                              lambda a: np.full_like(np.asarray(a, float), R["hafu_h"]),
+                              HF.cfg_of(DC["hafu"]), end0="ogami", end1="jiri")
+                hf.addt(bd.mesh())
+                bd.kanagu_std(hk)
+        elif HD:
             # ver2: profiled board halves (眉・登り裏甲/茅負の段・拝み・破風尻繰形) + 破風金具
             for sy in (-1, 1):
                 def ztf(a, _sx=sx, _sy=sy):
@@ -885,6 +928,9 @@ def build(p):
         # gegyo (懸魚) at the apex
         W_, H_ = 0.80, 0.78
         z_g = RF.z(Xg + ho, 0, Ye, False) - R["hafu_h"] + 0.06
+        if DV2:
+            W_, H_ = 0.74, 0.72
+            z_g = float(DR.VT(Ye)) - DC["nobori_t"] - R["hafu_h"] + 0.07
         org = np.array([xh + sx * (R["hafu_t"] / 2 + 0.03), 0, z_g])
         ol = PT.gegyo_outline(W_, H_)
         holes = [PT.heart(0, -H_ * 0.42, 0.20), PT.heart(-W_ * 0.17, -H_ * 0.65, 0.15), PT.heart(W_ * 0.17, -H_ * 0.65, 0.15)]
@@ -1034,7 +1080,18 @@ def build(p):
     zbase = h00 * Zk0 + h10 * dk_j * m0 + h01 * z1 + h11 * dk_j * m1
     zbase = zbase + bump(X) * kfade(D)
     ztop = zbase + RF.lip(D) * (1 - t)
-    if HONG:
+    if DV2:
+        DK = DB.Kohai(SimpleNamespace(RF=RF, Wk=Wk, dk_j=dk_j, zj_main=zj_main, m0=m0, m1=m1, Zk0=Zk0, bump=bump,
+                                      kfade=kfade, kh_w=kh_w, yke=yke, EK_ura_top=EK.ura_top, y_j=y_j), DC, DR)
+        acc = DB.Acc(); DK.mesh(acc)
+        emit_me("Kohai_Yane_Doban_Ichimonji", acc.to_mesh("Kohai_Yane_Doban_Ichimonji"), DB.MAT_ROOF, C, smooth=40)
+        kn = G.MB()
+        H_front = DK.front_nokitsuke(kn)
+        k_y_end = yke + abs(yke) - Ye + 0.15
+        DK.side_nobori(kn, H_front, k_y_end)
+        DK.toriai(kn, DR, H_front)
+        emit("Kohai_Nokitsuke_Doban", kn, DB.MAT_TRIM, C, smooth=20)
+    elif HONG:
         emit("Kohai_Yane_Nodi_KawaraBase", one(slab_grid(X, Y, ztop, zbase - th)), "Kawara_Base", C, smooth=40)
     else:
         emit("Kohai_Yane_Doban_CopperRoof", one(slab_grid(X, Y, ztop, zbase - th)), "Doban_Rokusho_Copper", C, smooth=40)
@@ -1043,7 +1100,49 @@ def build(p):
     # karahafu board + side hafu + uketo gegyo
     kb_ = G.MB(); kbg = G.MB(); ug = G.MB()
     W_, H_ = 0.55, 0.55
-    if HD:
+    if HD and DV2:
+        # A-1 ver2: the 唐破風板 sits under the copper 軒付 (top = 裏甲 + 起り), profiled like A-2 ver2
+        kcfg = HF.cfg_of(DC["hafu"], t=DC["kara_t"])
+        bd = HF.Board((0, yke, 0), (1, 0, 0), (0, -1, 0), -Wk - 0.02, Wk + 0.02,
+                      lambda a: EK.ura_top + bump(np.asarray(a, float)),
+                      lambda a: np.full_like(np.asarray(a, float), DC["kara_h"]), kcfg,
+                      end0="plain", end1="plain", step=0.025)
+        kb_.addt(bd.mesh())
+        c_ = kcfg
+        bd.plate(kbg, 0.0, c_["plate_L"], cusp_lo=False, cusp_hi=True)
+        bd.plate(kbg, bd.S - c_["plate_L"], bd.S, cusp_lo=True, cusp_hi=False)
+        bd.plate(kbg, bd.S / 2 - c_["mid_L"], bd.S / 2 + c_["mid_L"], inome=False)
+        # 起りの肩 (where the 起り meets the 反り) - small 八双-like plates, 六葉 between
+        for xs_ in (-kh_w, kh_w):
+            s_ = float(np.interp(xs_, bd.a, bd.s))
+            bd.plate(kbg, s_ - 0.11, s_ + 0.11, inome=True)
+        s_l = float(np.interp(-kh_w, bd.a, bd.s)); s_r = float(np.interp(kh_w, bd.a, bd.s))
+        bd.rokuyo_row(kbg, c_["plate_L"] + 0.05, s_l - 0.16)
+        bd.rokuyo_row(kbg, s_l + 0.16, bd.S / 2 - c_["mid_L"] - 0.05)
+        bd.rokuyo_row(kbg, bd.S / 2 + c_["mid_L"] + 0.05, s_r - 0.16)
+        bd.rokuyo_row(kbg, s_r + 0.16, bd.S - c_["plate_L"] - 0.05)
+        for sx in (-1, 1):
+            def zsf(a):
+                dks = np.asarray(a, float) - yke
+                return DK.VTk(dks) - DK.Hn(dks, H_front)
+            sb = HF.Board((sx * (Wk + 0.005), 0, 0), (0, 1, 0), (sx, 0, 0), yke, k_y_end, zsf,
+                          lambda a: np.full_like(np.asarray(a, float), DC["side_h"]), HF.cfg_of(DC["hafu"], t=DC["side_t"]),
+                          end0="plain", end1="plain")
+            kb_.addt(sb.mesh())
+            sb.rokuyo_row(kbg, 0.3, sb.S - 0.35)
+        z_top_c = EK.ura_top + kh_h
+        W_, H_ = 0.62, 0.52
+        org = np.array([0, yke - 0.085, z_top_c - 0.05])
+        ug.addt(G.extrude_poly(PT.gegyo_outline(W_, H_), 0.05, (org, np.array([1.0, 0, 0]), np.array([0, 0, 1.0])),
+                               holes=[PT.heart(0, -H_ * 0.45, 0.13), PT.heart(-W_ * 0.15, -H_ * 0.70, 0.08),
+                                      PT.heart(W_ * 0.15, -H_ * 0.70, 0.08)]))
+        for sd in (1, -1):
+            ug.addt(G.extrude_poly(PT.gegyo_fin(W_ * 1.35, H_ * 0.95, sd), 0.035,
+                                   (org + np.array([0, 0.012, 0]), np.array([1.0, 0, 0]), np.array([0, 0, 1.0]))))
+            ug.addt(G.extrude_poly(PT.gegyo_fin(W_ * 1.05, H_ * 0.6, sd), 0.03,
+                                   (org + np.array([0, -0.006, -H_ * 0.25]), np.array([1.0, 0, 0]), np.array([0, 0, 1.0]))))
+        kbg.addt(PT.rokuyo(org + np.array([0, -0.03, -H_ * 0.15]), (0, -1, 0), r=0.06, seg=24))
+    elif HD:
         # ver2: profiled karahafu board (眉・段・中央/端の金具) + side boards, 兎毛通 with 鰭
         kcfg = HF.cfg_of(HD, t=0.07)
         bd = HF.Board((0, yke, 0), (1, 0, 0), (0, -1, 0), -Wk - 0.02, Wk + 0.02,
@@ -1420,6 +1519,8 @@ def export_v2(out, RV, M2):
     size = int(RV.get("tex_size", 1024))
     tiles = M2.bake_tiles2(M2.BAKE2, os.path.join(out, "textures"), size=size)
     print("baked %d materials in %.1fs" % (len(tiles), time.time() - t0), flush=True)
+    if "hlib.doban" in sys.modules:          # A-1 ver2: numpy-generated copper tiles (already PNG)
+        tiles.update(sys.modules["hlib.doban"].TILES)
     nvar = M2.setup_gltf_variants(tiles)
     full = os.path.join(out, "haiden.glb")
     export_glb(full, image_format="AUTO")
@@ -1495,6 +1596,10 @@ def main():
         UV_MODE = RV.get("uv_mode", "grain")
     else:
         M = Mats()
+    if (p.get("doban_v2") or {}).get("enabled"):
+        from hlib import doban as DB
+        dc = DB.cfg_of(p)
+        DB.make_materials(M, os.path.join(out, "textures"), size=int(dc["tex_size"]), c=dc)
 
     info = build(p)
     fix_normals()
@@ -1529,6 +1634,8 @@ def main():
                            "finish": p["kawara"].get("material"), "template_tris": kw.get("template_tris")}
         if "chidori" in kw:
             stats["chidori"] = kw["chidori"]
+    if "doban_v2" in info:
+        stats["doban_v2"] = info["doban_v2"]
     stats["seq"] = V.get("seq", 0)
     if V2:
         stats["finishes"] = M2.FINISHES

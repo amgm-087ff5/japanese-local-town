@@ -32,9 +32,10 @@
 | 基壇高 | 1〜2尺 | 0.35m(+亀腹0.30m) |
 | 縁高 | 床高とほぼ同じ | 1.00m |
 
-## 4. Blender MCP 検証結果(結論: 条件付きで可)
+## 4. Blender MCP 検証結果(結論: ブリッジ経由で可。シーン検査に使用)
 - 対象: [ahujasid/blender-mcp](https://github.com/ahujasid/blender-mcp)(GitHubからclone)。Blender公式 lab/blender_mcp(projects.blender.org)はネットワーク許可外で取得不可。公式readmeでは背景モードは同期処理のみ対応との記述あり [readme](https://projects.blender.org/lab/blender_mcp/raw/branch/main/readme.md)。
 - ahujasid版アドオンは `BlenderMCPServer.start()` で `bpy.app.background` の場合に起動を拒否(背景モードでは `bpy.app.timers` が回らずコマンドキューが処理されないため)。
 - 対策: `haiden/blender/mcp/headless_bridge.py` でアドオンを読み込み、同じソケット(localhost:9876)を開き、メインスレッドのループで `_drain_command_queue()` を直接呼ぶ。→ `ping`/`get_scene_info`/`execute_code` が動作。
 - さらに PyPI 相当のMCPサーバー(`mcp-for-blender`, stdio)を venv に入れ、自作の最小MCPクライアント `mcp_client.py` から `get_scene_info` / `execute_blender_code` の往復に成功。
-- 使い方: シーン検査(オブジェクト数・配置確認)に利用。モデリング本体は再現性のためCLIスクリプト(build_haiden.py)で実行。
+- 使い方: 最終 haiden.blend を開いたブリッジに MCP 経由で execute_blender_code を送り、コレクション別オブジェクト数・地面下めり込み(z<-0.01)を検査 → 問題なし。モデリング本体は再現性のためCLI(build_haiden.py)。手順は haiden/blender/mcp/README.md。
+- 判断: GUI依存ツール(viewport screenshot)は不可、長時間レンダは同期ブロック。CIではMCP不要のためCLIのみ。

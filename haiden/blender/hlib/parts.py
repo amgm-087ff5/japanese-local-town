@@ -39,24 +39,27 @@ def hijiki_outline(L, h, curl=0.55, nseg=8):
     return np.array(pts)
 
 
-def kibana_outline(L, h, nseg=10):
-    """Carved beam-end (木鼻) in elevation from l=0 (beam) to l=L (nose)."""
-    pts = [(0, -h / 2), (0, h / 2)]
-    # top: straight then roll down into the nose
-    pts.append((L * 0.72, h / 2))
-    for i in range(1, nseg + 1):
-        t = i / nseg * math.pi * 0.9
-        pts.append((L * 0.72 + (L * 0.28) * math.sin(t), h / 2 - h * 0.42 * (1 - math.cos(t)) / 2 * 1.2))
-    # nose down and scalloped underside back to l=0
-    nb = 24
-    for i in range(nb + 1):
-        l = L * 0.97 * (1 - i / nb)
-        z = -h / 2 + 0.06 * h + 0.13 * h * abs(math.sin(3.2 * math.pi * l / L)) * (l / L) ** 0.3
-        if i == 0:
-            z = -h * 0.05
+def kibana_outline(L, h, nseg=14):
+    """Carved beam-end (木鼻) in elevation, l=0 (inside the beam) .. l=L (nose)."""
+    r = min(0.42 * L, 0.48 * h)
+    cx, cz = L - r, h / 2 - r
+    pts = [(0.0, -h / 2), (0.0, h / 2), (cx, h / 2)]
+    for i in range(1, nseg + 1):            # convex nose curling down
+        a = math.pi / 2 - i / nseg * math.pi
+        pts.append((cx + r * math.cos(a), cz + r * math.sin(a)))
+    # small inward curl (渦) under the nose
+    for i in range(1, 6):
+        a = -math.pi / 2 - i / 5 * math.pi * 0.6
+        pts.append((cx + 0.45 * r * math.cos(a), cz - 0.55 * r + 0.45 * r * math.sin(a)))
+    zl = cz - r * 1.0
+    l_end = cx - 0.45 * r * 0.6
+    nb = 22
+    for i in range(1, nb + 1):               # scalloped underside (繰形)
+        t = i / nb
+        l = l_end * (1 - t) + 0.30 * L * t
+        z = zl + (-h / 2 + 0.08 * h - zl) * t ** 0.7 - 0.06 * h * abs(math.sin(2 * math.pi * t))
         pts.append((l, z))
-    pts[-1] = (0.0, -h / 2)
-    pts = pts[:-1]
+    pts.append((0.30 * L * 0.5, -h / 2))
     return np.array(pts)
 
 
@@ -199,6 +202,17 @@ def rokuyo(center, normal, r=0.06, seg=24):
     # petal scallop: modulate radius by 6-lobe
     ang = np.arctan2(V[:, 1], V[:, 0])
     k = 1 + 0.12 * np.cos(6 * ang)
+    V[:, 0] *= k; V[:, 1] *= k
+    V = orient(V, (0, 0, 0), normal) + np.asarray(center, float)
+    return V, F
+
+
+def flower(center, normal, r=0.07, petals=8, seg=48):
+    """Carved flower / rosette relief disc (彫刻の花) facing `normal`."""
+    prof = [(r, 0.0), (r * 0.95, 0.012), (r * 0.7, 0.02), (r * 0.45, 0.028), (r * 0.3, 0.04), (r * 0.15, 0.045), (0.0, 0.05)]
+    V, F = lathe(prof, (0, 0, 0), seg, cap_bottom=True)
+    ang = np.arctan2(V[:, 1], V[:, 0])
+    k = 0.72 + 0.28 * np.abs(np.cos(petals / 2 * ang)) ** 0.6
     V[:, 0] *= k; V[:, 1] *= k
     V = orient(V, (0, 0, 0), normal) + np.asarray(center, float)
     return V, F

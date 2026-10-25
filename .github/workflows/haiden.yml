@@ -89,7 +89,7 @@ jobs:
           if [ -f haiden/out/stats.json ]; then cp haiden/out/stats.json _site/models/stats.json; fi
           if compgen -G "haiden/out/renders/*.png" > /dev/null; then cp haiden/out/renders/*.png _site/renders/; fi
           touch _site/.nojekyll
-          ls -laR _site | head -50
+          find _site -type f | sort
 
       - uses: actions/configure-pages@v5
 

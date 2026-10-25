@@ -22,20 +22,20 @@
   "en_w": 0.95,
   "en_tsuka_step": 1.06,
   "pillar_d": 0.25,
-  "pillar_top": 4.0,
+  "pillar_top": 3.6,
   "pillar_seg": 28,
   "nageshi_ji_z": [
     1.05,
     1.21
   ],
   "nageshi_uchi_z": [
-    2.92,
-    3.09
+    2.72,
+    2.88
   ],
   "nageshi_depth": 0.085,
   "nuki_z": [
-    3.8,
-    4.0
+    3.4,
+    3.6
   ],
   "nuki_w": 0.13,
   "kibana_len": 0.36,
@@ -76,24 +76,24 @@
   "noki_de": 1.65,
   "kioi_d": 1.0,
   "roof": {
-    "nokitsuke_t": 0.21,
+    "nokitsuke_t": 0.27,
     "slope_eave": 0.32,
-    "slope_ridge": 1.3,
+    "slope_ridge": 1.05,
     "slope_pow": 1.6,
-    "thick": 0.22,
+    "thick": 0.27,
     "step_len": 0.3,
     "step_lip": 0.012,
     "col_step": 0.1,
     "irimoya_d": 1.8,
     "hafu_out": 0.45,
-    "sori_rise": 0.32,
-    "sori_len": 2.6,
+    "sori_rise": 0.42,
+    "sori_len": 3.0,
     "sori_pow": 2.2,
     "sori_fade": 1.75,
     "nobi": 0.18,
     "hakomune_w": 0.5,
     "hakomune_h": 0.48,
-    "onita_h": 0.95,
+    "onita_h": 0.82,
     "sumimune_w": 0.2,
     "hafu_h": 0.32,
     "hafu_t": 0.065
@@ -101,7 +101,7 @@
   "kohai": {
     "depth": 2.0,
     "pillar_w": 0.21,
-    "pillar_top": 3.35,
+    "pillar_top": 3.08,
     "noki_de": 1.15,
     "side_de": 0.9,
     "kioi_d": 0.68,

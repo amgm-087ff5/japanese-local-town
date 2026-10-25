@@ -15,12 +15,12 @@ SPEC = {
     "Nuri_Shu_Vermilion":   ((0.56, 0.055, 0.018), 0.55, 0.0, "paint"),
     "Gofun_White":          ((0.80, 0.78, 0.72), 0.80, 0.0, "plaster"),
     "Kuro_Urushi_Lacquer":  ((0.012, 0.010, 0.009), 0.22, 0.0, "lacquer"),
-    "Kiji_Hinoki_Wood":     ((0.50, 0.33, 0.18), 0.60, 0.0, "wood"),
+    "Kiji_Hinoki_Wood":     ((0.40, 0.25, 0.13), 0.60, 0.0, "wood"),
     "Kiji_Old_Wood":        ((0.30, 0.22, 0.15), 0.70, 0.0, "wood"),
-    "Doban_Rokusho_Copper": ((0.20, 0.42, 0.34), 0.62, 0.0, "copper"),
+    "Doban_Rokusho_Copper": ((0.10, 0.30, 0.23), 0.62, 0.0, "copper"),
     "Kanagu_Gold":          ((0.95, 0.66, 0.26), 0.28, 1.0, "metal"),
     "Seido_Bronze":         ((0.45, 0.30, 0.14), 0.40, 1.0, "metal"),
-    "Ishi_Granite":         ((0.36, 0.35, 0.33), 0.85, 0.0, "stone"),
+    "Ishi_Granite":         ((0.22, 0.21, 0.195), 0.85, 0.0, "stone"),
     "Shikkui_Plaster":      ((0.78, 0.77, 0.73), 0.85, 0.0, "plaster"),
     "Ki_Ochre":             ((0.62, 0.42, 0.08), 0.6, 0.0, "paint"),
     "Uchi_Dark":            ((0.03, 0.022, 0.016), 0.8, 0.0, "flat"),
@@ -30,10 +30,10 @@ SPEC = {
     "Nuno_White":           ((0.82, 0.80, 0.76), 0.8, 0.0, "flat"),
     "Nuno_Purple":          ((0.18, 0.04, 0.22), 0.8, 0.0, "flat"),
     # environment only
-    "Env_Gravel":           ((0.42, 0.40, 0.37), 0.9, 0.0, "gravel"),
-    "Env_Sando_Stone":      ((0.33, 0.32, 0.30), 0.85, 0.0, "stone"),
-    "Env_Cedar_Leaf":       ((0.025, 0.06, 0.03), 0.8, 0.0, "leaf"),
-    "Env_Bark":             ((0.12, 0.07, 0.05), 0.9, 0.0, "wood"),
+    "Env_Gravel":           ((0.115, 0.105, 0.09), 0.9, 0.0, "gravel"),
+    "Env_Sando_Stone":      ((0.17, 0.165, 0.155), 0.85, 0.0, "stone"),
+    "Env_Cedar_Leaf":       ((0.018, 0.038, 0.02), 0.85, 0.0, "leaf"),
+    "Env_Bark":             ((0.16, 0.075, 0.045), 0.9, 0.0, "wood"),
     "Env_Moss":             ((0.08, 0.13, 0.04), 0.9, 0.0, "leaf"),
 }
 
@@ -168,8 +168,8 @@ def make_material(name, use_ao=True):
         r = nb.node("ShaderNodeValToRGB")
         nb.link(mix, r.inputs[0])
         e = r.color_ramp.elements
-        e[0].position = 0.30; e[0].color = (0.07, 0.17, 0.13, 1)
-        e[1].position = 0.72; e[1].color = (0.36, 0.58, 0.48, 1)
+        e[0].position = 0.30; e[0].color = (0.04, 0.11, 0.08, 1)
+        e[1].position = 0.72; e[1].color = (0.20, 0.42, 0.33, 1)
         e3 = r.color_ramp.elements.new(0.52); e3.color = (*col, 1)
         e4 = r.color_ramp.elements.new(0.38); e4.color = (0.16, 0.11, 0.07, 1)
         e4.position = 0.33

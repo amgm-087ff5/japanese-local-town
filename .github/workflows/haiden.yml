@@ -107,9 +107,11 @@ jobs:
           import json, os, re
           ids = [i for i in os.listdir("_site/models") if os.path.isfile(f"_site/models/{i}/haiden_web.glb")]
           st_of = {i: json.load(open(f"_site/models/{i}/stats.json", encoding="utf-8")) for i in ids}
-          # newest first: stats "seq" (A-2 ver2 = 3, A-2v1 = 2, A-1 = 1), then natural id order
+          # newest first: explicit order; unknown ids after them by stats "seq" (desc), then natural id order
+          ORDER = ["A-2", "A-2v1", "A-1"]
           nat = lambda s: [int(x) if x.isdigit() else x for x in re.split(r"(\d+)", s)]
-          ids = sorted(ids, key=lambda i: (st_of[i].get("seq", 0), nat(i)), reverse=True)
+          rest = sorted([i for i in ids if i not in ORDER], key=lambda i: (st_of[i].get("seq", 0), nat(i)), reverse=True)
+          ids = [i for i in ORDER if i in ids] + rest
           idx = []
           for i in ids:
               st = st_of[i]
@@ -126,6 +128,10 @@ jobs:
           shutil.copy(f"_site/models/{latest}/haiden_web.glb", "_site/models/haiden_web.glb")
           shutil.copy(f"_site/models/{latest}/stats.json", "_site/models/stats.json")
           PY
+          # cache-busting build id in the viewer pages
+          for f in _site/index.html _site/app/index.html; do
+            if [ -f "$f" ]; then sed -i "s/__BUILD__/${GITHUB_SHA::12}/g" "$f"; fi
+          done
           touch _site/.nojekyll
           find _site -type f | sort
 

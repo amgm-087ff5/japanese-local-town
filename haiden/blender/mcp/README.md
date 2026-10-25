@@ -33,3 +33,11 @@ python3 -c 'import json;print(json.dumps({"code":open("haiden/blender/mcp/inspec
 /tmp/mcpvenv/bin/python haiden/blender/mcp/mcp_client.py --server /tmp/mcpvenv/bin/mcp-for-blender call execute_blender_code "$(cat /tmp/args.json)"
 ```
 出力 `INSPECT_JSON {...}`: 瓦の枚数、浮き(>0.10m)・めり込み(<-0.03m)の件数、オブジェクト別tris、地面下オブジェクト。結果は haiden/docs/progress.md。
+
+## A-2 ver2(破風・UV・仕上げ)の検査(2026-10-25)
+```bash
+python3 haiden/blender/mcp/headless_bridge.py --addon /tmp/blender-mcp/addon.py --blend haiden/out/A-2/haiden.blend --timeout 600 &
+python3 -c 'import json;print(json.dumps({"code":open("haiden/blender/mcp/inspect_hafu.py").read()}))' > /tmp/args.json
+/tmp/mcpvenv/bin/python haiden/blender/mcp/mcp_client.py --server /tmp/mcpvenv/bin/mcp-for-blender call execute_blender_code "$(cat /tmp/args.json)"
+```
+出力 `INSPECT_JSON {...}`: 破風金具の島ごとの浮き、UVMap の有無、木目方向の一致度、仕上げ材質の欠落。結果は haiden/docs/progress.md。

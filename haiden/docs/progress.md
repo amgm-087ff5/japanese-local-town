@@ -72,3 +72,54 @@ ahujasid/blender-mcp: 背景モード非対応 → headless_bridge.py で可。M
 - 大棟の輪違い・鯱/経の巻の装飾は簡略。鬼瓦は雲形鬼板の様式化(鬼面なし)
 - 瓦の個体差(焼きむら)はマテリアルのノイズのみ。GLB は EXT_mesh_gpu_instancing 不使用(隅・谷で個別カットのため。Draco で 4 MB)
 - 丸瓦寸法・熨斗段数・獅子口の採否・千鳥破風の比率は一般知識ベース(research.md で「要確認」)
+
+---
+
+# 拝殿A-2 ver2 進捗(2026-10-25)
+
+## ユーザー要望(12:17)
+「破風の垂直面がツルツル(そもそも破風に垂直面などあるのか)」「朱色だけでなく木目のバリエーション」
+
+## 結論(調査 research.md §6)
+破風板は棟木・桁の木口に打ち付けた**垂直に立つ厚板**で、外面は垂直面。ただし実物は平滑ではなく、上端に登り裏甲・茅負の段、下縁に眉(眉欠き)、拝み・破風尻・中間に金具、表面に木目・刷毛目・退色がある。ver1 は無地の矩形断面スイープだった。
+
+## 実施
+- 版管理: 旧 A-2 → **A-2v1**(`variants/A-2v1.json`、name「拝殿A-2 ver1」)、新 **A-2 = 拝殿A-2 ver2**。variants に `seq`(A-2=3, A-2v1=2, A-1=1)
+- 破風板(`hlib/hafu.py`): 妻(入母屋)・千鳥破風・唐破風・向拝側面の全てを断面プロファイル付きの板に置換。登り裏甲/登り茅負/小段の3段、眉(眉欠き+V溝2本、破風尻の繰形に沿って上がり消える)、拝み(左右突き付け)、破風尻の繰形+木口金具、破風金具(雲形の縁・猪目透かし・唐草打ち出し・鋲)、六葉の釘隠し列、兎毛通に鰭。掛瓦を段の外へ移動・垂れを短く・妻は破風尻まで延長
+- UV(`geom.grain_uv`): 部材(連結部分)ごとの主軸に沿う木目方向UV(1UV=2m)
+- 材質(`hlib/materials2.py`): 丹塗(刷毛ムラ・退色斑・下地の覗き、レンダは稜線の擦れも)、白木(檜・細い年輪・稀な節)、古色(焦茶〜灰褐色・木目の浮き・雨筋、金具も古色)。胡粉・漆喰・瓦・銅・石は共通
+- テクスチャ: 11材質 × baseColor/normal/metallicRoughness を 1024px でベイク(2コアで約170秒)
+- GLB: **KHR_materials_variants**(Blender 5.2 の glTF エクスポーターの variants 機能を bpy から設定。variants 名 = nuri/shiraki/koshoku、既定 nuri)→ gltf-transform webp(q82)+ draco。three.js r170 で読込・3仕上げの切替を headless(swiftshader)で確認
+- CI(haiden.yml): matrix [A-1, A-2v1, A-2] 並列、`haiden_web*.glb` をアップロード/コピー、models/index.json は固定順 A-2→A-2v1→A-1(未知IDは seq 降順)で各要素に finishes/finish_mode(separate 時は finish_glbs)、`__BUILD__` を `${GITHUB_SHA::12}` に置換。actionlint OK、_site 組立をローカル再現(28MB)
+- 見直しループ(各回 Read で目視、参考写真 dc058dc6 と比較)
+  1. draft: 金具が淡く白っぽい・丹塗が退色しすぎてピンク・白木が塗装のように白い・古色が青灰 → 退色の量と色、白木の基調を下げ晩材を濃く、古色を褐色寄りに
+  2. draft マクロ: 眉・段が遠目に読めない → 眉欠き 6→10mm・溝 5→8mm、茅負の出 28→36mm。破風尻の木口が赤い箱に見える → 木口金具、妻の掛瓦を破風尻まで延長
+  3. preview: 古色の金具がまだ金色 → 古色金具を暗い青銅色に。古色は正面斜めで参考写真の焦茶〜灰褐色に近い
+  4. MCP 検査で破風金具の下端が眉欠きの彫り下げの上に 1.5cm 浮く(32島)→ 金具を眉の線の上で止める → 浮き 0
+  5. three.js 表示: 唐破風の段・眉・木目が GLB でも見える。古色は three.js の環境光で Cycles より明るめ(課題)
+
+## 数値(A-2 ver2)
+- 1,016,708 tris / 547,360 verts / 129 objects / 19 材質(+仕上げ用5: Shiraki_Hinoki, Koshoku_Kiji, Koshoku_Kiji_Dark, Kanagu_Koshoku)
+- Web GLB **4.95 MB**(Draco + WebP 33枚 計0.67MB、3仕上げ込み)/ フル GLB 69.8 MB(PNG)
+- ビルド 約3分(うちベイク約170秒)、preview レンダ 90〜140秒/枚(2コア)。final は A-2 を 32spp(6枚、CI 4コアで約25分見込み)
+
+## 凍結確認
+A-1(7b7b936)・A-2v1(fbbade4)を凍結 commit のコードと現行コードで生成し、全オブジェクトの頂点・ループ(面)・UV・材質名の md5 が一致(差分0)。Web GLB も同サイズ(1,043,092 B / 3,941,516 B)。
+
+## MCP 検査(headless_bridge + mcp-for-blender、`mcp/inspect_hafu.py`、最終 haiden.blend)
+| 項目 | 結果 |
+|---|---|
+| 破風金具 浮き(島ごとの板/懸魚までの最小距離 >0.010m) | 妻 120島・唐破風 50島・千鳥 60島 すべて 0(最大 0.005 = 板金具の厚み分) |
+| UV | 129 メッシュ全てに UVMap |
+| 木目方向(+u と部材長手の一致度、面積加重、1.0=一致) | 柱 0.958、頭貫 0.985、妻破風板 0.987、唐破風板 0.974、千鳥破風板 0.986、地垂木 0.961、虹梁 0.958 |
+| 仕上げ対応 | 129 オブジェクトに finish_mats、参照材質の欠落 0 |
+
+## レンダ
+haiden/out/A-2/renders/{front_oblique, front_oblique_shiraki, front_oblique_koshoku, hafu_kohai, hafu_kohai_koshoku, hafu_tsuma_shiraki}.png(preview。CI で final)
+
+## 課題
+- ビューア表示は three.js の照明次第で古色が明るく見える(ベイク色は AO なし)。必要ならベイク時に AO 相当の係数を掛ける
+- 掛瓦の垂れで登り裏甲(最上段)はほぼ隠れ、見えるのは茅負と小段の2段
+- 丹塗の「角の擦れ」は Cycles レンダのみ(Bevel)。GLB はタイルの斑点のみ
+- 破風尻の繰形・金具の文様は様式化(実測資料なし、research.md で要確認)。錣破風は採用せず
+- フル GLB が 70MB(非公開。Web 版のみ公開)

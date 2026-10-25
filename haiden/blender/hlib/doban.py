@@ -194,7 +194,8 @@ def nokitsuke_profile(c, H, layers, depth=None, u0=-0.005, mizukiri=True):
     ch = c["nk_ch"]
     top = H - 0.003
     hl = (top - (c["mz_t"] if mizukiri else 0.0)) / layers
-    P = [(-depth, 0.0)]
+    mids = [u for u in (-0.20, -0.12, -0.06) if u > -depth + 0.01]
+    P = [(-depth, 0.0)] + [(u, 0.0) for u in mids]       # extra points: the 反り is applied per vertex
     for i in range(layers):
         ui = u0 + i * c["nk_proj"]
         v0, v1 = i * hl, (i + 1) * hl
@@ -203,7 +204,8 @@ def nokitsuke_profile(c, H, layers, depth=None, u0=-0.005, mizukiri=True):
         ut = u0 + (layers - 1) * c["nk_proj"] + c["nk_lean"]
         um = ut + c["mz_out"]
         vb = layers * hl
-        P += [(um - 0.004, vb), (um - 0.004, vb - c["mz_drip"]), (um, vb - c["mz_drip"]), (um, top), (-depth, top)]
+        P += [(um - 0.004, vb), (um - 0.004, vb - c["mz_drip"]), (um, vb - c["mz_drip"]), (um, top), (0.0, top)]
+        P += [(u, top) for u in mids[::-1]] + [(-depth, top)]
     else:
         P += [(-depth, top)]
     return G.ccw(np.array(P))
@@ -392,7 +394,7 @@ class Roof:
         # 反り per vertex (not per path point): near the corners the inner part follows the 裏甲 below
         k = len(prof)
         V = V.copy()
-        V[:, 2] += self.RF.S(V[:, 0], V[:, 1]) - np.repeat(self.RF.S(xy[:, 0], xy[:, 1]), k)
+        V[:, 2] += self.RF.S(np.clip(V[:, 0], -Xe, Xe), np.clip(V[:, 1], -Ye, Ye)) - np.repeat(self.RF.S(xy[:, 0], xy[:, 1]), k)
         mb.add(V, F)
 
     def nobori(self, mb, a_end):

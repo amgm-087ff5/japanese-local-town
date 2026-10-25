@@ -6,8 +6,32 @@
 <title>拝殿 クイックビュー</title>
 <meta name="description" content="拝殿モデルをすぐに眺めるための軽量 3D ビュー">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22%3E%3Cpath d=%22M2 5.5c6 1 14 1 20 0M4 9h16M6.5 9v13M17.5 9v13%22 stroke=%22%23c0432a%22 stroke-width=%222.4%22 fill=%22none%22 stroke-linecap=%22round%22/%3E%3C/svg%3E">
-<!-- 読込最速化:モデルとライブラリを並行して先読み -->
-<link rel="preload" href="models/haiden_web.glb" as="fetch" type="model/gltf-binary" crossorigin="anonymous">
+<script>
+/* 読込最速化:three.js の取得を待たずに models/index.json → 表示するモデルの GLB を先に取りに行く。
+   index.json が無ければ従来どおり models/haiden_web.glb。表示しないモデルは読まない。 */
+window.__boot = (function () {
+  var ctrl = new AbortController();
+  var want = (new URLSearchParams(location.search).get('m') || '').toLowerCase();
+  var bad = /^\s*(javascript|data|blob|vbscript):/i;
+  function go(list, entry) {
+    var res = fetch(entry ? entry.glb : 'models/haiden_web.glb', { signal: ctrl.signal });
+    res.catch(function () {});   // 未処理 rejection をコンソールに出さない(本体側で処理)
+    return { list: list, entry: entry, ctrl: ctrl, res: res };
+  }
+  return fetch('models/index.json', { cache: 'no-cache' })
+    .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+    .then(function (j) {
+      var raw = Array.isArray(j) ? j : j && j.models;
+      var list = (raw || []).filter(function (e) {
+        return e && e.id != null && typeof e.glb === 'string' && !bad.test(e.glb) && (e.id = String(e.id));
+      });
+      if (!list.length) throw 0;
+      var entry = list.filter(function (e) { return e.id.toLowerCase() === want; })[0] || list[0];
+      return go(list, entry);
+    })
+    .catch(function () { return go(null, null); });
+})();
+</script>
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js">
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/loaders/GLTFLoader.js">
@@ -40,7 +64,7 @@ body { background: var(--bg); color: var(--ink); font: 13px/1.5 var(--font-ui); 
 #stage canvas { display: block; width: 100%; height: 100%; touch-action: none; outline: none; }
 
 .title {
-  position: absolute; z-index: 5; top: calc(10px + env(safe-area-inset-top)); left: 12px; display: flex; flex-direction: column; gap: 4px;
+  position: absolute; z-index: 5; top: calc(10px + env(safe-area-inset-top)); left: 12px; display: flex; flex-direction: column; gap: 6px;
   padding: 8px 12px; background: var(--glass); border: 1px solid var(--line); border-radius: 8px; pointer-events: none; max-width: calc(100% - 24px);
 }
 .title h1 { margin: 0; font: 700 17px/1.2 var(--font-head); letter-spacing: .14em; display: flex; align-items: center; gap: 8px; }
@@ -48,6 +72,25 @@ body { background: var(--bg); color: var(--ink); font: 13px/1.5 var(--font-ui); 
 .stats { display: flex; flex-wrap: wrap; gap: 2px 10px; color: var(--ink-2); font-size: 11.5px; font-variant-numeric: tabular-nums; }
 .stats:empty { display: none; }
 .stats b { color: var(--ink); font-weight: 600; }
+
+/* モデル(バリアント)切替 */
+.variants { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; pointer-events: auto; }
+.variants[hidden] { display: none; }
+.tabs { display: flex; gap: 4px; overflow-x: auto; max-width: 100%; scrollbar-width: none; }
+.tab {
+  position: relative; flex: none; height: 30px; padding: 0 11px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface);
+  color: var(--ink-2); font: inherit; font-size: 12.5px; cursor: pointer; white-space: nowrap; overflow: hidden;
+}
+.tab:hover { border-color: var(--ink-3); color: var(--ink); }
+.tab:focus-visible, .same:focus-within { outline: 2px solid var(--shu); outline-offset: 1px; }
+.tab[aria-selected="true"] { background: var(--shu); border-color: var(--shu); color: #fff; font-weight: 600; }
+.tab[aria-busy="true"]::after {   /* 読込中のしるし */
+  content: ""; position: absolute; left: 0; bottom: 0; height: 2px; width: 40%; background: currentColor; opacity: .8;
+  animation: slide 1s ease-in-out infinite alternate;
+}
+@keyframes slide { from { transform: translateX(0); } to { transform: translateX(150%); } }
+.same { display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 4px; color: var(--ink-2); font-size: 12px; cursor: pointer; user-select: none; white-space: nowrap; border-radius: 6px; }
+.same input { margin: 0; width: 15px; height: 15px; accent-color: var(--shu); cursor: pointer; }
 
 .tools {
   position: absolute; z-index: 5; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end;
@@ -85,7 +128,9 @@ body { background: var(--bg); color: var(--ink); font: 13px/1.5 var(--font-ui); 
   .btn .lbl { display: none; }
   .btn { padding: 0 10px; }
   .renders img { height: 68px; min-width: 68px; }
+  .title { left: 8px; max-width: calc(100% - 16px); padding: 7px 10px; }
 }
+@media (prefers-reduced-motion: reduce) { .tab[aria-busy="true"]::after { animation: none; width: 100%; opacity: .5; } }
 </style>
 <script type="importmap">
 {
@@ -101,6 +146,10 @@ body { background: var(--bg); color: var(--ink); font: 13px/1.5 var(--font-ui); 
   <div class="progress" id="progress"><i></i></div>
   <div class="title">
     <h1><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 5.5c6 1 14 1 20 0M4 9h16M6.5 9v13M17.5 9v13" stroke="var(--shu)" stroke-width="2.4" fill="none" stroke-linecap="round"/></svg>拝殿</h1>
+    <div class="variants" id="variants" hidden>
+      <div class="tabs" id="tabs" role="tablist" aria-label="モデル切替"></div>
+      <label class="same" title="切替時にカメラ位置を保つ(比較用)"><input type="checkbox" id="chkSame" checked>同じ視点で切替</label>
+    </div>
     <div class="stats" id="stats"></div>
   </div>
   <div class="status" id="status" role="status" aria-live="polite"><b id="pct">0%</b><span id="sub">読み込み中…</span></div>
@@ -119,51 +168,73 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
-const MODEL = 'models/haiden_web.glb';
-const STATS = 'models/stats.json';
+const LEGACY = { id: null, name: '', glb: 'models/haiden_web.glb', stats: 'models/stats.json' };
 const $ = (id) => document.getElementById(id);
-const state = window.viewerState = { loaded: false, error: null, tris: 0 };
+// テスト用に状態を公開(値のみ)
+const state = window.viewerState = { loaded: false, error: null, tris: 0, current: null, models: [] };
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('haiden-quick:' + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem('haiden-quick:' + k, JSON.stringify(v)); } catch { /* 無視 */ } },
+};
+const esc = (s) => String(s).replace(/[<&>"]/g, (c) => ({ '<': '&lt;', '&': '&amp;', '>': '&gt;', '"': '&quot;' }[c]));
+const safeURL = (u) => typeof u === 'string' && u && !/^\s*(javascript|data|blob|vbscript):/i.test(u);
 
 /* ---------- stats.json(任意)とレンダ画像 ---------- */
 let statsBytes = 0;
 const fmtNum = (n) => Number(n).toLocaleString('ja-JP');
 const fmtBytes = (b) => b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.round(b / 1024) + ' KB';
+const fmtDims = (v) => {
+  const a = Array.isArray(v) ? v : v && typeof v === 'object' ? Object.values(v).filter((x) => typeof x === 'number') : null;
+  return a ? a.map((x) => (+x).toFixed(1)).join('×') + ' m' : v;
+};
 const STAT_KEYS = [
   [['triangles', 'tris', 'tri_count', 'polygons', 'polys', 'faces'], '△', fmtNum],
   [['vertices', 'verts', 'vertex_count'], '頂点', fmtNum],
   [['objects', 'meshes', 'mesh_count', 'parts'], '部材', fmtNum],
   [['materials', 'material_count'], '材質', fmtNum],
   [['glb_bytes', 'size_bytes', 'file_size', 'bytes'], '', fmtBytes],
-  [['dimensions', 'size_m', 'dims'], '寸法', (v) => Array.isArray(v) ? v.map((x) => (+x).toFixed(1)).join('×') + ' m' : v],
+  [['dimensions', 'dimensions_m', 'size_m', 'dims'], '寸法', fmtDims],
 ];
-fetch(STATS, { cache: 'no-cache' }).then((r) => (r.ok ? r.json() : null)).then((s) => {
-  if (!s || typeof s !== 'object') return;
-  const out = [];
-  for (const [keys, label, fmt] of STAT_KEYS) {
-    const k = keys.find((x) => s[x] !== undefined && s[x] !== null);
-    if (!k) continue;
-    if (fmt === fmtBytes) statsBytes = +s[k] || 0;
-    out.push(`<span>${label ? label + ' ' : ''}<b>${String(fmt(s[k])).replace(/[<&>]/g, '')}</b></span>`);
-  }
-  const date = s.generated || s.updated || s.date;
-  if (date) out.push(`<span>${String(date).slice(0, 16).replace('T', ' ').replace(/[<&>]/g, '')}</span>`);
-  $('stats').innerHTML = out.join('');
-  showRenders(s.renders);
-}).catch(() => { /* stats.json が無い/不正なら表示しない */ });
+function loadStats(url, my) {
+  statsBytes = 0;
+  $('stats').innerHTML = '';
+  clearRenders();
+  if (!safeURL(url)) return;
+  fetch(url, { cache: 'no-cache' }).then((r) => (r.ok ? r.json() : null)).then((s) => {
+    if (my !== seq || !s || typeof s !== 'object') return;
+    const out = [];
+    for (const [keys, label, fmt] of STAT_KEYS) {
+      const k = keys.find((x) => s[x] !== undefined && s[x] !== null);
+      if (!k) continue;
+      if (fmt === fmtBytes) statsBytes = +s[k] || 0;
+      out.push(`<span>${label ? label + ' ' : ''}<b>${esc(fmt(s[k]))}</b></span>`);
+    }
+    const date = s.generated || s.updated || s.date;
+    if (date) out.push(`<span>${esc(String(date).slice(0, 16).replace('T', ' '))}</span>`);
+    $('stats').innerHTML = out.join('');
+    showRenders(s.renders);
+  }).catch(() => { /* stats.json が無い/不正なら表示しない */ });
+}
 
+function clearRenders() {
+  const nav = $('renders');
+  if (nav.hidden && !nav.children.length) return;
+  nav.replaceChildren(); nav.hidden = true;
+  requestAnimationFrame(resize);
+}
 function showRenders(list) {
   if (!Array.isArray(list) || !list.length) return;
   const nav = $('renders');
   for (const it of list.slice(0, 40)) {
     const src0 = typeof it === 'string' ? it : it && (it.src || it.file || it.path || it.name);
-    if (!src0 || /^(javascript|data):/i.test(src0)) continue;
+    if (!safeURL(src0)) continue;
     const src = /^(https?:)?\/\//.test(src0) || src0.startsWith('renders/') ? src0 : 'renders/' + src0.replace(/^\.?\//, '');
-    const title = (typeof it === 'object' && it.title) || src0.split('/').pop();
+    const title = String((typeof it === 'object' && it.title) || src0.split('/').pop());
     const a = document.createElement('a');
     a.href = src; a.target = '_blank'; a.rel = 'noopener'; a.title = title;
     const img = document.createElement('img');
     img.src = src; img.alt = title; img.loading = 'lazy'; img.decoding = 'async';
-    img.onerror = () => a.remove();
+    img.onerror = () => { a.remove(); if (!nav.children.length) { nav.hidden = true; requestAnimationFrame(resize); } };
     a.append(img); nav.append(a);
   }
   if (nav.children.length) { nav.hidden = false; requestAnimationFrame(resize); }
@@ -206,7 +277,7 @@ const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true; controls.dampingFactor = 0.08; controls.screenSpacePanning = true;
 controls.autoRotate = true; controls.autoRotateSpeed = 1.0; controls.maxPolarAngle = Math.PI * 0.495;
 
-let model = null, home = null;
+let model = null, home = null, atHome = false, wire = false;
 let needsRender = true;
 const invalidate = () => { needsRender = true; };
 controls.addEventListener('change', invalidate);
@@ -214,7 +285,8 @@ function resize() {
   const w = stage.clientWidth, h = stage.clientHeight;
   renderer.setSize(w, h, false);
   camera.aspect = w / Math.max(1, h); camera.updateProjectionMatrix();
-  if (home) fit();
+  // ユーザーが触っていなければ、今の向きのまま画面に収め直す(触った後は視点を保つ)
+  if (home && atHome) fit(camera.position.clone().sub(controls.target));
   invalidate();
 }
 window.addEventListener('resize', resize);
@@ -227,19 +299,26 @@ window.addEventListener('resize', resize);
 })();
 
 /* ---------- 視点 ---------- */
-function fit() {
+const HOME_DIR = new THREE.Vector3(1, 0.55, 1.25);
+function setLimits(dist) {
+  const r = home.radius;
+  camera.near = Math.max(Math.min(dist, r) / 1000, 0.001); camera.far = dist * 20 + r * 10;
+  camera.updateProjectionMatrix();
+  controls.minDistance = r * 0.05; controls.maxDistance = Math.max(dist, r * 3) * 6;
+}
+function fit(dir = HOME_DIR) {
   const { center, radius } = home;
   const fov = THREE.MathUtils.degToRad(camera.fov);
   const fitH = radius / Math.sin(fov / 2);
   const fitW = radius / Math.sin(Math.atan(Math.tan(fov / 2) * camera.aspect));
   const dist = Math.max(fitH, fitW) * 0.92;   // 外接球は余白が大きいので少し寄せる
-  const dir = new THREE.Vector3(1, 0.55, 1.25).normalize();
+  const d = dir.clone().normalize();
+  if (!isFinite(d.x) || d.lengthSq() === 0) d.copy(HOME_DIR).normalize();
   controls.target.copy(center);
-  camera.position.copy(center).addScaledVector(dir, dist);
-  camera.near = Math.max(dist / 1000, 0.001); camera.far = dist * 20 + radius * 10;
-  camera.updateProjectionMatrix();
-  controls.minDistance = radius * 0.05; controls.maxDistance = dist * 6;
+  camera.position.copy(center).addScaledVector(d, dist);
+  setLimits(dist);
   controls.update(); invalidate();
+  atHome = true;
 }
 $('btnReset').addEventListener('click', () => { if (home) fit(); });
 $('btnRotate').addEventListener('click', (e) => {
@@ -248,13 +327,16 @@ $('btnRotate').addEventListener('click', (e) => {
 });
 // 触ったら自動回転を止める(ボタン表示も同期)
 controls.addEventListener('start', () => {
+  atHome = false;
   if (controls.autoRotate) { controls.autoRotate = false; $('btnRotate').setAttribute('aria-pressed', 'false'); }
 });
+function applyWire(root) {
+  root.traverse((o) => { if (o.isMesh) [].concat(o.material).forEach((m) => { if ('wireframe' in m) m.wireframe = wire; }); });
+}
 $('btnWire').addEventListener('click', (e) => {
-  if (!model) return;
-  const on = e.currentTarget.getAttribute('aria-pressed') !== 'true';
-  e.currentTarget.setAttribute('aria-pressed', on);
-  model.traverse((o) => { if (o.isMesh) [].concat(o.material).forEach((m) => { if ('wireframe' in m) m.wireframe = on; }); });
+  wire = e.currentTarget.getAttribute('aria-pressed') !== 'true';
+  e.currentTarget.setAttribute('aria-pressed', wire);
+  if (model) applyWire(model);
   invalidate();
 });
 
@@ -262,6 +344,7 @@ $('btnWire').addEventListener('click', (e) => {
 function progress(loaded, total) {
   const t = total || statsBytes;
   const p = t ? Math.min(1, loaded / t) : -1;
+  $('progress').classList.remove('done');
   $('progress').firstElementChild.style.width = (p < 0 ? 35 : p * 100) + '%';
   $('pct').textContent = p < 0 ? fmtBytes(loaded) : Math.round(p * 100) + '%';
   $('sub').textContent = p < 0 ? '読み込み中…' : `${fmtBytes(loaded)} / ${fmtBytes(t)}`;
@@ -269,15 +352,91 @@ function progress(loaded, total) {
 const draco = new DRACOLoader().setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/libs/draco/gltf/');
 draco.preload();   // GLB のダウンロードと並行してデコーダを取得
 const loader = new GLTFLoader().setDRACOLoader(draco);
+
+/* 前のモデルを GPU/CPU メモリごと解放 */
+function disposeObject(root) {
+  const seen = new Set();
+  root.traverse((o) => {
+    if (o.geometry) o.geometry.dispose();
+    if (o.material) [].concat(o.material).forEach((m) => {
+      if (seen.has(m)) return; seen.add(m);
+      for (const k in m) {
+        const t = m[k];
+        if (t && t.isTexture && !seen.has(t)) { seen.add(t); t.dispose(); t.source?.data?.close?.(); }
+      }
+      m.dispose();
+    });
+  });
+}
+
+/* fetch でストリーム読込(進捗表示+切替時に中断できる) */
+async function readBody(res, my) {
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const total = res.headers.get('content-encoding') ? 0 : +res.headers.get('content-length') || 0;
+  if (!res.body) return res.arrayBuffer();
+  const reader = res.body.getReader(), chunks = [];
+  let loaded = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (my !== seq) { reader.cancel().catch(() => {}); return null; }
+    chunks.push(value); loaded += value.length;
+    progress(loaded, total);
+  }
+  const buf = new Uint8Array(loaded);
+  let off = 0;
+  for (const c of chunks) { buf.set(c, off); off += c.length; }
+  return buf.buffer;
+}
+
+let seq = 0, ctrl = null, entries = null;
 const t0 = performance.now();
-loader.load(MODEL, (gltf) => {
-  model = gltf.scene;
+
+async function loadEntry(entry, res) {
+  const my = ++seq;
+  if (ctrl) ctrl.abort();
+  if (!res) { ctrl = new AbortController(); res = fetch(entry.glb, { signal: ctrl.signal }); }
+  const keepView = $('chkSame').checked && !!model && !!home;
+  state.loaded = false; state.error = null; state.current = entry.id;
+  markTabs(entry.id, true);
+  loadStats(entry.stats, my);
+  progress(0, 0);
+  if (!model) { $('status').hidden = false; $('status').classList.remove('err'); }
+  const ts = performance.now();
+  try {
+    const buf = await readBody(await res, my);
+    if (my !== seq || !buf) return;
+    const base = new URL('./', new URL(entry.glb, location.href)).href;
+    const gltf = await loader.parseAsync(buf, base);
+    const root = gltf.scene || gltf.scenes?.[0];
+    if (my !== seq) { if (root) disposeObject(root); return; }
+    if (!root) throw new Error('シーンが含まれていません');
+    show(root, keepView);
+    state.loaded = true; state.ms = Math.round(performance.now() - ts); state.msFromStart = Math.round(performance.now() - t0);
+  } catch (err) {
+    if (my !== seq || err?.name === 'AbortError') return;
+    console.warn('読込失敗:', err);
+    state.error = String(err && err.message || err);
+    $('status').hidden = false;
+    $('status').classList.add('err');
+    $('pct').textContent = 'モデルを読み込めませんでした';
+    $('sub').textContent = entry.glb;
+  } finally {
+    if (my === seq) { $('progress').classList.add('done'); markTabs(entry.id, false); }
+  }
+}
+
+function show(root, keepView) {
   let tris = 0;
-  model.traverse((o) => {
+  root.traverse((o) => {
     if (!o.isMesh) return;
     o.castShadow = o.receiveShadow = true;
     const g = o.geometry; tris += (g.index ? g.index.count : g.attributes.position.count) / 3 * (o.isInstancedMesh ? o.count : 1);
   });
+  if (wire) applyWire(root);
+  // 差し替え:新モデルが用意できてから旧モデルを外して解放(ちらつき防止)
+  if (model) { scene.remove(model); disposeObject(model); }
+  model = root;
   scene.add(model);
   model.updateMatrixWorld(true);
   model.traverse((o) => { o.matrixAutoUpdate = false; });
@@ -291,20 +450,76 @@ loader.load(MODEL, (gltf) => {
   sun.shadow.camera.updateProjectionMatrix();
   fill.position.set(c.x - r, c.y + r * 0.6, c.z - r * 0.8);
   renderer.shadowMap.needsUpdate = true;
-  fit();
+  if (keepView) { setLimits(camera.position.distanceTo(controls.target)); invalidate(); }   // カメラはそのまま
+  else fit();
   state.tris = Math.round(tris);
   if (!$('stats').textContent) $('stats').innerHTML = `<span>△ <b>${fmtNum(state.tris)}</b></span>`;
-  $('progress').classList.add('done'); $('status').hidden = true;
-  state.loaded = true; state.ms = Math.round(performance.now() - t0);
-}, (ev) => progress(ev.loaded, ev.lengthComputable ? ev.total : 0), (err) => {
-  console.warn('読込失敗:', err);
-  state.error = String(err && err.message || err);
-  $('progress').classList.add('done');
-  $('status').classList.add('err');
-  $('pct').textContent = 'モデルを読み込めませんでした';
-  $('sub').textContent = MODEL;
-});
+  $('status').hidden = true;
+}
+
+/* ---------- モデル切替タブ ---------- */
+function buildTabs(list) {
+  const tabs = $('tabs');
+  for (const e of list) {
+    const b = document.createElement('button');
+    b.className = 'tab'; b.type = 'button'; b.setAttribute('role', 'tab'); b.dataset.id = e.id;
+    b.textContent = e.name || e.id; b.title = (e.name ? e.name + '(' + e.id + ')' : e.id);
+    b.addEventListener('click', () => select(e.id));
+    tabs.append(b);
+  }
+  tabs.addEventListener('keydown', (ev) => {
+    const d = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: 1, ArrowUp: -1 }[ev.key];
+    if (!d) return;
+    const bs = [...tabs.children], i = bs.indexOf(document.activeElement);
+    if (i < 0) return;
+    ev.preventDefault();
+    const n = bs[(i + d + bs.length) % bs.length]; n.focus(); select(n.dataset.id);
+  });
+  $('variants').hidden = false;
+}
+function markTabs(id, busy) {
+  for (const b of $('tabs').children) {
+    const on = b.dataset.id === id;
+    b.setAttribute('aria-selected', on); b.tabIndex = on ? 0 : -1;
+    if (on && busy) b.setAttribute('aria-busy', 'true'); else b.removeAttribute('aria-busy');
+    if (on) b.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+  }
+}
+function select(id) {
+  const e = entries && entries.find((x) => x.id === id);
+  if (!e || (id === state.current && !state.error)) return;   // 表示中/読込中の同じモデルは何もしない
+  const url = new URL(location.href); url.searchParams.set('m', e.id);
+  history.replaceState(history.state, '', url);
+  setEntryUI(e);
+  loadEntry(e);
+}
+function setEntryUI(e) {
+  if (e.id === null) return;
+  document.title = `${e.name || e.id} — 拝殿 クイックビュー`;
+  $('appLink').href = 'app/?m=' + encodeURIComponent(e.id);
+}
+
+$('chkSame').checked = store.get('sameView', true);
+$('chkSame').addEventListener('change', (ev) => store.set('sameView', ev.target.checked));
+
+/* ---------- 起動 ---------- */
 resize();
+const boot = await window.__boot;
+ctrl = boot.ctrl;
+if (boot.list) {
+  entries = boot.list.map((e) => ({ id: e.id, name: e.name ? String(e.name) : '', glb: e.glb, stats: safeURL(e.stats) ? e.stats : null }));
+  state.models = entries.map((e) => e.id);
+  buildTabs(entries);
+  setEntryUI(entries.find((e) => e.id === boot.entry.id));
+  loadEntry(entries.find((e) => e.id === boot.entry.id), boot.res);
+} else {
+  loadEntry(LEGACY, boot.res);   // index.json なし:従来動作
+}
+// テスト・デバッグ用
+window.viewerDebug = {
+  mem: () => ({ ...renderer.info.memory }),
+  cam: () => [...camera.position.toArray(), ...controls.target.toArray()],
+};
 </script>
 </body>
 </html>

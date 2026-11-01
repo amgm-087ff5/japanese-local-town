@@ -127,6 +127,8 @@ button { font: inherit; color: inherit; }
 .tab:hover { border-color: var(--ink-3); color: var(--ink); }
 .tab:focus-visible, .same:focus-within { outline: 2px solid var(--shu); outline-offset: -2px; }
 .tab[aria-selected="true"] { background: var(--shu); border-color: var(--shu); color: #fff; font-weight: 600; }
+.tgrp { flex: none; align-self: center; color: var(--ink-3); font-size: 11px; letter-spacing: .06em; white-space: nowrap; padding: 0 2px 0 8px; }
+.tgrp:not(:first-child) { margin-left: 6px; }
 .tab[aria-busy="true"]::after, .seg button[aria-busy="true"]::after {   /* 読込中のしるし */
   content: ""; position: absolute; left: 0; bottom: 0; height: 2px; width: 40%; background: currentColor; opacity: .8;
   animation: slide 1s ease-in-out infinite alternate;
@@ -784,7 +786,9 @@ function syncURL() {
   if (finCur && (wantFin || url.searchParams.has('f'))) url.searchParams.set('f', finCur); else url.searchParams.delete('f');
   if (url.href !== location.href) history.replaceState(history.state, '', url);
   if (e.id !== null) {
-    document.title = `${e.name || e.id} — 拝殿 クイックビュー`;
+    const cn = e.category_name || '拝殿';
+    document.title = `${e.name || e.id} — ${cn} クイックビュー`;
+    const hT = $('titleBox').querySelector('h1 .t'); if (hT) hT.textContent = cn;
     $('appLink').href = 'app/?m=' + encodeURIComponent(e.id) + (finCur ? '&f=' + encodeURIComponent(finCur) : '');
   }
 }
@@ -792,7 +796,13 @@ function syncURL() {
 /* ---------- モデル切替タブ ---------- */
 function buildTabs(list) {
   const tabs = $('tabs');
+  let cat = null;
   for (const e of list) {
+    if (e.category !== cat) {   // 種類が変わるところで区切り(拝殿/鳥居/灯籠)。見出しはタブではないので role を付けない
+      cat = e.category;
+      const g = document.createElement('span'); g.className = 'tgrp'; g.setAttribute('aria-hidden', 'true'); g.textContent = e.category_name;
+      tabs.append(g);
+    }
     const b = document.createElement('button');
     b.className = 'tab'; b.type = 'button'; b.setAttribute('role', 'tab'); b.dataset.id = e.id;
     b.textContent = e.name || e.id; b.title = (e.name ? e.name + '(' + e.id + ')' : e.id);
@@ -802,7 +812,7 @@ function buildTabs(list) {
   tabs.addEventListener('keydown', (ev) => {
     const d = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: 1, ArrowUp: -1 }[ev.key];
     if (!d) return;
-    const bs = [...tabs.children], i = bs.indexOf(document.activeElement);
+    const bs = [...tabs.querySelectorAll('[role="tab"]')], i = bs.indexOf(document.activeElement);
     if (i < 0) return;
     ev.preventDefault();
     const n = bs[(i + d + bs.length) % bs.length]; n.focus(); select(n.dataset.id);
@@ -812,7 +822,7 @@ function buildTabs(list) {
   $('titleBox').classList.add('has-tabs');
 }
 function markTabs(id, busy) {
-  for (const b of $('tabs').children) {
+  for (const b of $('tabs').querySelectorAll('[role="tab"]')) {
     const on = b.dataset.id === id;
     b.setAttribute('aria-selected', on); b.tabIndex = on ? 0 : -1;
     if (on && busy) b.setAttribute('aria-busy', 'true'); else b.removeAttribute('aria-busy');
@@ -841,6 +851,7 @@ if (boot.list) {
   entries = boot.list.map((e) => ({
     id: e.id, name: e.name ? String(e.name) : '', glb: e.glb, stats: safeURL(e.stats) ? e.stats : null,
     finishes: Array.isArray(e.finishes) ? e.finishes : undefined, finish_mode: e.finish_mode,
+    category: e.category ? String(e.category) : 'haiden', category_name: e.category_name ? String(e.category_name) : '拝殿',
   }));
   state.models = entries.map((e) => e.id);
   buildTabs(entries);

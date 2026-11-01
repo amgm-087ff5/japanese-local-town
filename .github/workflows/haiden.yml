@@ -20,14 +20,15 @@ concurrency:
 
 jobs:
   # One job per model variant, in parallel. A-1 = 拝殿A-1 ver2 (銅板一文字葺, 3 finishes); A-2 = 拝殿A-2 ver2
-  # (3 finishes); A-2v1 / A-1v1 are frozen (ver1, 丹塗のみ).
+  # (3 finishes); A-2v1 / A-1v1 are frozen (ver1, 丹塗のみ). T-1 (鳥居) / L-1 (灯籠) are 境内アセット
+  # (haiden/docs/assets.md): variants/<ID>.json があれば assets のスクリプトと render_asset.py を使う。
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        variant: [A-1, A-2, A-2v1, A-1v1]
+        variant: [A-1, A-2, A-2v1, A-1v1, T-1]
     steps:
       - uses: actions/checkout@v4
 
@@ -50,12 +51,31 @@ jobs:
           echo "$RUNNER_TEMP/gt/node_modules/.bin" >> "$GITHUB_PATH"
 
       - name: Build model (${{ matrix.variant }})
-        run: python haiden/blender/build_haiden.py --variant ${{ matrix.variant }} --out haiden/out/${{ matrix.variant }}
+        env:
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          set -eu
+          OUT="haiden/out/$VARIANT"
+          V="haiden/blender/assets/variants/$VARIANT.json"
+          if [ -f "$V" ]; then
+            SCRIPT=$(python3 -c 'import json, os, sys; print(os.path.basename(json.load(open(sys.argv[1], encoding="utf-8"))["script"]))' "$V")
+            python "haiden/blender/assets/$SCRIPT" --variant "$VARIANT" --out "$OUT"
+          else
+            python haiden/blender/build_haiden.py --variant "$VARIANT" --out "$OUT"
+          fi
 
       - name: Render (${{ matrix.variant }})
         env:
           HAIDEN_QUALITY: final
-        run: python haiden/blender/render.py --out haiden/out/${{ matrix.variant }}
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          set -eu
+          OUT="haiden/out/$VARIANT"
+          if [ -f "haiden/blender/assets/variants/$VARIANT.json" ]; then
+            python haiden/blender/assets/render_asset.py --out "$OUT"
+          else
+            python haiden/blender/render.py --out "$OUT"
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
@@ -107,15 +127,18 @@ jobs:
           import json, os, re
           ids = [i for i in os.listdir("_site/models") if os.path.isfile(f"_site/models/{i}/haiden_web.glb")]
           st_of = {i: json.load(open(f"_site/models/{i}/stats.json", encoding="utf-8")) for i in ids}
-          # newest first: explicit order; unknown ids after them by stats "seq" (desc), then natural id order
-          ORDER = ["A-1", "A-2", "A-2v1", "A-1v1"]
+          # order: 拝殿 (A-1, A-2, A-2v1, A-1v1) -> 鳥居 (T-1) -> 灯籠 (L-1); unknown ids after them by stats "seq" (desc), then natural id order
+          ORDER = ["A-1", "A-2", "A-2v1", "A-1v1", "T-1", "L-1"]
           nat = lambda s: [int(x) if x.isdigit() else x for x in re.split(r"(\d+)", s)]
           rest = sorted([i for i in ids if i not in ORDER], key=lambda i: (st_of[i].get("seq", 0), nat(i)), reverse=True)
           ids = [i for i in ORDER if i in ids] + rest
           idx = []
           for i in ids:
               st = st_of[i]
-              e = {"id": i, "name": st.get("name", i), "glb": f"models/{i}/haiden_web.glb", "stats": f"models/{i}/stats.json"}
+              # category: 拝殿は stats に無い -> haiden / 拝殿
+              e = {"id": i, "name": st.get("name", i), "category": st.get("category", "haiden"),
+                   "category_name": st.get("category_name", "拝殿"),
+                   "glb": f"models/{i}/haiden_web.glb", "stats": f"models/{i}/stats.json"}
               e["finishes"] = st.get("finishes", [{"id": "nuri", "name": "丹塗"}])
               e["finish_mode"] = st.get("finish_mode", "single")
               if st.get("finish_mode") == "separate":
@@ -123,7 +146,8 @@ jobs:
               idx.append(e)
           json.dump(idx, open("_site/models/index.json", "w", encoding="utf-8"), ensure_ascii=False, indent=2)
           print(json.dumps(idx, ensure_ascii=False, indent=2))
-          latest = ids[0]
+          # 互換コピー: 拝殿の先頭(A-1)のまま(アセットにはしない)
+          latest = next(e["id"] for e in idx if e["category"] == "haiden")
           import shutil
           shutil.copy(f"_site/models/{latest}/haiden_web.glb", "_site/models/haiden_web.glb")
           shutil.copy(f"_site/models/{latest}/stats.json", "_site/models/stats.json")

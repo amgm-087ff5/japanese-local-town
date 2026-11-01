@@ -28,7 +28,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [A-1, A-2, A-2v1, A-1v1, T-1]
+        variant: [A-1, A-2, A-2v1, A-1v1, T-1, L-1]
     steps:
       - uses: actions/checkout@v4
 

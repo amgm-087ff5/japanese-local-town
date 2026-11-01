@@ -31,7 +31,10 @@ import make_finish_glbs as mf  # noqa: E402
 TEST_BUILD = 'testbuild123'
 FINISHES = [{'id': fid, 'name': name} for fid, name, _, _ in mf.FINISHES]
 # (id, name, 仕上げ方式)
-IDS = [('A-2', '拝殿A-2 ver2', 'khr_variants'), ('A-2v1', '拝殿A-2 ver1', 'separate'), ('A-1', '拝殿A-1 ver1', None)]
+IDS = [('A-2', '拝殿A-2 ver2', 'khr_variants'), ('A-2v1', '拝殿A-2 ver1', 'separate'), ('A-1', '拝殿A-1 ver1', None),
+       ('T-1', '明神鳥居', 'khr_variants'), ('L-1', '春日灯籠', 'khr_variants')]
+# 種類(category)。拝殿(A-*)は category を持たない既存形式のまま(=拝殿扱いの確認を兼ねる)
+CATEGORY = {'T-1': ('torii', '鳥居'), 'L-1': ('toro', '灯籠')}
 SIZES = [('pc', 1280, 800, False), ('sp', 390, 844, True)]
 
 
@@ -111,6 +114,9 @@ def build_variants(dst: Path, real: bool, gen: Path) -> list:
                 if dummy_png(dst / 'renders' / mid / f'{vv}.png', f'{mid} {vv}', col):
                     renders.append({'src': f'renders/{mid}/{vv}.png', 'title': t})
         stats.update({'id': mid, 'name': name, 'glb_bytes': (mdir / 'haiden_web.glb').stat().st_size, 'renders': renders})
+        if mid in CATEGORY:
+            stats.update(category=CATEGORY[mid][0], category_name=CATEGORY[mid][1])
+        entry.update(category=stats.get('category', 'haiden'), category_name=stats.get('category_name', '拝殿'))
         (mdir / 'stats.json').write_text(json.dumps(stats, ensure_ascii=False))
         entry['_src'] = str(src[1] if src else glb)
         entry['_mode'] = (stats.get('finish_mode') or ('separate' if any(isinstance(f, dict) and f.get('glb') for f in stats.get('finishes') or []) else 'khr_variants')) if stats.get('finishes') else None
@@ -305,6 +311,23 @@ def run_variants(r: Runner, index, real: bool):
     fin_ids = lambda mid: [f['id'] for f in FINISHES] if modes[mid] else []   # noqa: E731
     # 実物 GLB は SwiftShader では重い(数百万△)ので PC 幅だけ
     sizes = SIZES[:1] if real else SIZES
+
+    # 0) 種類ごとの見出し(拝殿 / 鳥居 / 灯籠)。category の無いエントリは拝殿
+    exp_ids = [e['id'] for e in index]
+    exp_groups = ['拝殿', '鳥居', '灯籠']
+    ctx, pg, errors = r.open('/', False, 1280, 800)
+    q_ids = pg.evaluate("() => [...document.querySelectorAll('#tabs [role=\"tab\"]')].map((e) => e.dataset.id)")
+    q_groups = pg.evaluate("() => [...document.querySelectorAll('#tabs .tgrp')].map((e) => e.textContent)")
+    q_title = pg.evaluate("() => document.querySelector('#titleBox h1 .t').textContent")
+    ctx.close()
+    good = q_ids == exp_ids and q_groups == exp_groups and not errors
+    r.report(good, 'quick 種類見出し', '-', f'tabs={q_ids} groups={q_groups} h1={q_title}')
+    ctx, pg, errors = r.open('/app/', False, 1280, 800)
+    a_groups = pg.evaluate("() => [...document.querySelectorAll('#sampleMenu .mh')].map((e) => e.textContent)")
+    a_side = pg.evaluate("() => [...document.querySelectorAll('#emptySamples .sgrp')].map((e) => e.textContent)")
+    ctx.close()
+    good = a_groups == ['サンプルモデル'] + exp_groups and a_side == exp_groups and not errors
+    r.report(good, 'app 種類見出し', '-', f'menu={a_groups} buttons={a_side}')
 
     # 1) 表示確認(PC / 390x844 縦長)
     pages = [('quick', '/', first, None), ('quick_m_A-1', '/?m=A-1', 'A-1', None), ('quick_f_koshoku', '/?f=koshoku', first, 'koshoku'),

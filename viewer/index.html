@@ -197,6 +197,8 @@ dl.info dd { margin: 0; font-variant-numeric: tabular-nums; text-align: right; w
 .samples { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin: 0 0 14px; }
 .samples:empty { display: none; }
 .samples .btn { height: 32px; font-size: 13px; }
+.samples .sgrp { flex-basis: 100%; text-align: center; color: var(--ink-3); font-size: 12px; margin-top: 2px; }
+.samples .sgrp:not(:first-child) { margin-top: 8px; }
 /* 仕上げ切替(左上) */
 .finishbar {
   position: fixed; z-index: 14; top: calc(60px + env(safe-area-inset-top)); left: 12px; display: flex; align-items: center; gap: 4px; height: 38px; padding: 3px;
@@ -1024,12 +1026,22 @@ async function loadIndex() {
         id: String(e.id), name: e.name ? String(e.name) : '', root, url: new URL(v(e.glb), root).href,
         stats: safeURL(e.stats) ? new URL(v(e.stats), root).href : null,
         finishes: Array.isArray(e.finishes) ? e.finishes : undefined, finish_mode: e.finish_mode,
+        // 種類(拝殿/鳥居/灯籠)。無いエントリは拝殿
+        category: e.category ? String(e.category) : 'haiden', category_name: e.category_name ? String(e.category_name) : '拝殿',
       }));
   } catch { return []; }
 }
 function buildSamples(list) {
   const menu = $('sampleMenu'), empty = $('emptySamples');
+  let cat = null;
   for (const e of list) {
+    if (e.category !== cat) {   // 種類が変わるところで見出し(拝殿/鳥居/灯籠)
+      cat = e.category;
+      const h = document.createElement('div'); h.className = 'mh'; h.setAttribute('role', 'presentation'); h.textContent = e.category_name;
+      menu.append(h);
+      const eh = document.createElement('span'); eh.className = 'sgrp'; eh.textContent = e.category_name;
+      empty.append(eh);
+    }
     const b = document.createElement('button');
     b.type = 'button'; b.setAttribute('role', 'menuitemradio'); b.setAttribute('aria-checked', 'false'); b.dataset.id = e.id;
     const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = e.name || e.id;

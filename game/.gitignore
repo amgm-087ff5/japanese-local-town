@@ -1,0 +1,9 @@
+.godot/
+out/
+*.apk
+*.aab
+*.keystore
+*.jks
+android/
+*.idsig
+__pycache__/

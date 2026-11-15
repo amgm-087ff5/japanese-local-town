@@ -22,14 +22,20 @@ const STEP_EXTRA_DOWN := 0.05
 const WORLD_LIMIT := 127.0
 const WATER_DEPTH_MAX := 1.0  # 足元が WATER_LEVEL - 1.0 より深い所へは進めない
 
-const SPOT_CLEARANCE := 0.5   # 開始位置は木以外の占有領域からこの距離(m)より外に置く
+const SPOT_CLEARANCE := 3.0   # 開始位置は木以外の占有領域からこの距離(m)より外に置く(三人称のカメラが物の中に入らないように)
 const SPOT_STEP := 0.25       # 開始位置を探すときの半径の刻み(m)
 const SPOT_MAX_RADIUS := 15.0
 const SPOT_DIRS := 32
+const SPOT_FWD_MAX := 8.0      # 開始位置を前方へずらす最大距離(m)
+const CAM_SPOT_CLEARANCE := 1.0 # 三人称カメラの位置と、アバターからカメラまでの線分は木以外の占有領域からこの距離(m)より外
 
 const EYE_HEIGHT := 1.5
 const TP_HEIGHT := 1.9        # 三人称のカメラ高さ
-const TP_BACK := 3.2          # 三人称のカメラ距離(後方)
+const TP_BACK := 3.2          # 三人称のカメラ距離(後方・横画面)
+const TP_BACK_PORTRAIT := 4.5 # 三人称のカメラ距離(後方・縦画面)
+const FOV_LANDSCAPE := 75.0   # 横画面の画角(縦方向・度。KEEP_HEIGHT)
+const TP_FOV_PORTRAIT := 42.0 # 縦画面の三人称の画角(横方向・度)。アバターが画面高さの約2割に見える
+const FP_FOV_PORTRAIT := 75.0 # 縦画面の一人称の画角(横方向・度)。狭くしない
 const CAM_TERRAIN_CLEAR := 0.3
 const CAM_HIT_MARGIN := 0.2
 const CAM_MIN_DIST := 0.6
@@ -145,21 +151,43 @@ func exit() -> void:
 		g.mark_dirty()   # 次の保存に含める(位置は世界データ)
 
 
-## 開始位置 p が木以外の占有領域(+SPOT_CLEARANCE)の外か。外なら p、内なら最も近い外側の点を返す。
-## 中心から半径を広げながら方向を変えて探す(最初に見つかった点が最も近い)。
+## 開始位置 p を決める。条件は _spot_ok(アバターと三人称カメラ)。満たせば p。
+## 満たさなければ、まず前方(yaw の向き)へずらし、それでも駄目なら中心から半径を広げながら方向を変えて探す。
 func _free_spot(p: Vector2) -> Vector2:
 	var polys := _solid_footprints()
-	if not _spot_blocked(p, polys):
+	if _spot_ok(p, polys):
 		return p
+	var fwd := Vector2(-sin(yaw), -cos(yaw))   # 歩く向き(_forward と同じ)
 	var r := SPOT_STEP
+	while r <= SPOT_FWD_MAX:
+		var q := p + fwd * r
+		if absf(q.x) <= WORLD_LIMIT and absf(q.y) <= WORLD_LIMIT and _spot_ok(q, polys):
+			return q
+		r += SPOT_STEP
+	r = SPOT_STEP
 	while r <= SPOT_MAX_RADIUS:
 		for k in SPOT_DIRS:
 			var a := TAU * float(k) / float(SPOT_DIRS)
 			var q := p + Vector2(cos(a), sin(a)) * r
-			if absf(q.x) <= WORLD_LIMIT and absf(q.y) <= WORLD_LIMIT and not _spot_blocked(q, polys):
+			if absf(q.x) <= WORLD_LIMIT and absf(q.y) <= WORLD_LIMIT and _spot_ok(q, polys):
 				return q
 		r += SPOT_STEP
 	return p
+
+
+## 開始位置 q が条件を満たすか。
+## アバターは木以外の占有領域から SPOT_CLEARANCE 外。三人称カメラ(後方・縦画面の距離 TP_BACK_PORTRAIT)の位置と、
+## アバターからカメラまでの線分は CAM_SPOT_CLEARANCE 外(横画面の距離 TP_BACK はこの線分の上にあるので含まれる)。
+func _spot_ok(q: Vector2, polys: Array) -> bool:
+	if _spot_blocked(q, polys, SPOT_CLEARANCE):
+		return false
+	var behind := Vector2(sin(yaw), cos(yaw))   # 三人称カメラは体の後方(_update_camera の位置と同じ向き)
+	var n := maxi(1, ceili(TP_BACK_PORTRAIT / SPOT_STEP))
+	for i in range(1, n + 1):
+		var s := q + behind * (TP_BACK_PORTRAIT * float(i) / float(n))
+		if _spot_blocked(s, polys, CAM_SPOT_CLEARANCE):
+			return false
+	return true
 
 
 ## 木以外の物の占有領域(ワールド座標)。Game.world から直接作る(ObjectLayer の生成に依らない)。
@@ -177,10 +205,10 @@ func _solid_footprints() -> Array:
 	return out
 
 
-func _spot_blocked(q: Vector2, polys: Array) -> bool:
+func _spot_blocked(q: Vector2, polys: Array, clearance: float) -> bool:
 	for poly in polys:
 		var pp: PackedVector2Array = poly
-		if Geom.point_in_polygon(q, pp) or _dist_to_outline(q, pp) < SPOT_CLEARANCE:
+		if Geom.point_in_polygon(q, pp) or _dist_to_outline(q, pp) < clearance:
 			return true
 	return false
 
@@ -382,13 +410,36 @@ func _ok_at(x: float, z: float) -> bool:
 func _update_camera() -> void:
 	if camera == null:
 		return
+	var portrait := _is_portrait()
+	_apply_projection(portrait)
 	camera.rotation = Vector3(pitch, 0.0, 0.0)
 	var eye := Vector3(0.0, EYE_HEIGHT, 0.0)
 	if first_person:
 		camera.position = eye
 	else:
-		var ideal := Vector3(0.0, TP_HEIGHT, TP_BACK)
+		var back := TP_BACK_PORTRAIT if portrait else TP_BACK
+		var ideal := Vector3(0.0, TP_HEIGHT, back)
 		camera.position = eye.lerp(ideal, _third_person_t(eye, ideal))
+
+
+func _is_portrait() -> bool:
+	if not is_inside_tree():
+		return false
+	var s := get_viewport().get_visible_rect().size
+	return s.y > s.x
+
+
+## 縦長は KEEP_WIDTH(横の画角を保つ)にし、横画面と同じ横方向の見え方にする。画角は視点と向きで決める。
+## 横画面は従来どおり KEEP_HEIGHT・75 度。ビューポートの大きさが変わるたびに呼ばれる(毎回の比較は安価)。
+func _apply_projection(portrait: bool) -> void:
+	var keep := Camera3D.KEEP_WIDTH if portrait else Camera3D.KEEP_HEIGHT
+	if camera.keep_aspect != keep:
+		camera.keep_aspect = keep
+	var f := FOV_LANDSCAPE
+	if portrait:
+		f = FP_FOV_PORTRAIT if first_person else TP_FOV_PORTRAIT
+	if not is_equal_approx(camera.fov, f):
+		camera.fov = f
 
 
 ## 三人称のカメラを 0〜1 の位置へ詰める(物の当たりを物理レイ、地形は高さ見本で判定)。

@@ -70,11 +70,16 @@ func _init(main: Node) -> void:
 	set_landscape(false)
 
 
-## 縦: 道具4列・地表4列(2段)。横: 2列で縦に流す。
+## 縦: 道具4列・地表4列、順は 道具→地表→スライダ。
+## 横: 道具2列・地表2列(文字が切れない幅)。スライダを地表より前に出し、地表を開いても見えるようにする。
 func set_landscape(land: bool) -> void:
 	_tool_grid.columns = 2 if land else 4
 	_surface_grid.columns = 2 if land else 4
-	_slider_grid.columns = 1 if land else 2
+	_slider_grid.columns = 2
+	if land:
+		move_child(_surface_grid, get_child_count() - 1)
+	else:
+		move_child(_surface_grid, _tool_grid.get_index() + 1)
 	_key = ""
 	refresh()
 

@@ -12,6 +12,7 @@ uniform float water_level = -0.6;
 global uniform vec4 g_season_grass : source_color;
 global uniform float g_snow;
 global uniform float g_wet;
+global uniform float g_night;
 
 uniform vec3 c_soil : source_color = vec3(0.56, 0.48, 0.37);
 uniform vec3 c_wet_soil : source_color = vec3(0.30, 0.25, 0.20);
@@ -35,6 +36,14 @@ void vertex() {
 
 float hash12(vec2 p) {
 	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+
+// 夜の色味(g_night 0 昼 〜 1 夜): 彩度を落として青みの灰色へ寄せ、明度も下げる。昼は素通し。
+vec3 night_grade(vec3 c, float n) {
+	float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+	vec3 cool = vec3(l) * vec3(1.02, 1.16, 0.64);
+	c = mix(c, cool, n * 0.75);
+	return c * mix(1.0, 0.55, n);
 }
 
 void fragment() {
@@ -104,8 +113,9 @@ void fragment() {
 	vec3 c_rock_v = c_rock * mix(0.80, 1.18, big) * mix(0.90, 1.08, fine);
 	c_rock_v *= mix(0.92, 1.05, mid);
 	col = mix(col, c_rock_v, cliff);
+	col = night_grade(col, g_night);
 
-	// 雪: 上向きの面に。縁は模様で揺らす
+	// 雪: 上向きの面に。縁は模様で揺らす(雪は夜の色味を掛けず、青白いまま)
 	float snow_edge = 0.62 - 0.15 * (big - 0.5);
 	float snow = g_snow * smoothstep(snow_edge, snow_edge + 0.18, ny) * (1.0 - cliff);
 	col = mix(col, c_snow * mix(0.94, 1.0, grain), snow);

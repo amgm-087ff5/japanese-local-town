@@ -226,8 +226,10 @@ func _pan_to(p: Vector2) -> void:
 func _screen_pan_delta(rel: Vector2) -> Vector3:
 	if camera == null or not camera.is_inside_tree():
 		return Vector3.ZERO
-	var vp_h := maxf(camera.get_viewport().get_visible_rect().size.y, 1.0)
-	var s := 2.0 * _v_distance * tan(deg_to_rad(FOV) * 0.5) / vp_h
+	var vp := camera.get_viewport().get_visible_rect().size
+	# KEEP_WIDTH では画角は横方向。KEEP_HEIGHT では縦方向で決まる
+	var span := maxf(vp.x if camera.keep_aspect == Camera3D.KEEP_WIDTH else vp.y, 1.0)
+	var s := 2.0 * _v_distance * tan(deg_to_rad(FOV) * 0.5) / span
 	var b := camera.global_transform.basis
 	var right := Vector3(b.x.x, 0.0, b.x.z)
 	var up_flat := Vector3(b.y.x, 0.0, b.y.z)
@@ -341,6 +343,11 @@ func _clamp_state() -> void:
 func _update_camera() -> void:
 	if camera == null or not is_inside_tree():
 		return
+	# 縦長は KEEP_WIDTH(横の画角を保つ)。横画面と同じ横方向の見え方(同じ距離で同じ縮尺)になる。
+	var sz := camera.get_viewport().get_visible_rect().size
+	var keep := Camera3D.KEEP_WIDTH if sz.y > sz.x else Camera3D.KEEP_HEIGHT
+	if camera.keep_aspect != keep:
+		camera.keep_aspect = keep
 	var offset := Vector3(sin(_v_yaw) * cos(_v_pitch), -sin(_v_pitch), cos(_v_yaw) * cos(_v_pitch)) * _v_distance
 	var pos := _v_target + offset
 	var ground := _ground_y(pos.x, pos.z)

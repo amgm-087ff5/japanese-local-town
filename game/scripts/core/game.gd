@@ -39,6 +39,15 @@ const PAINT_SOFT_SAMPLES := 8       # 地表の縁のなじませ: 中心の外�
 # 見本の神社の配置(中心線 x=0、南(+Z)から北(-Z)へ参道)
 const SHRINE_CENTER := Vector2(0.0, -10.0)
 const FOREST_RADIUS := 58.0
+# 丘の世界(hills)の仕上げ用: 丘の(中心 m・高さ m・半径 m)。中央平地と川の外側
+const HILL_BUMPS := [
+	[Vector2(60.0, -35.0), 6.0, 22.0],
+	[Vector2(30.0, 70.0), 4.5, 20.0],
+	[Vector2(-15.0, -80.0), 7.0, 20.0],
+]
+const HILL_FOREST_MIN_DIST := 38.0   # 中心からこれより内側には森を置かない(中央の平地)
+const HILL_FLAT_PATCH_DIST := 45.0   # 苔・土のむらは中心からこの距離の内側だけ
+const HILL_RIVER_CLEAR := 14.0       # 川の中心線からこの幅の中には森を置かない
 
 var world: WorldData = null
 var mode := "edit"
@@ -110,14 +119,16 @@ func set_mode(m: String) -> void:
 
 
 ## 世界を新規作成して開く。kind は "flat"(平地) "hills"(丘) "sample"(丘+見本の神社)。
-func new_world(kind: String, name := "") -> void:
+## seed_value が 0 以上ならその seed で作る(テストの再現用)。省略時は乱数。
+func new_world(kind: String, name := "", seed_value := -1) -> void:
 	var w := WorldData.new()
 	w.id = _new_id()
-	w.seed = randi()
+	w.seed = seed_value if seed_value >= 0 else randi()
 	match kind:
 		"hills":
 			w.name = "あたらしい丘" if name.is_empty() else name
 			_gen_hills(w)
+			_decorate_hills(w)
 		"sample":
 			w.name = "見本の里" if name.is_empty() else name
 			_gen_hills(w)
@@ -611,6 +622,66 @@ func _gen_hills(w: WorldData) -> void:
 			h = lerpf(h, RIVER_BED, t)
 			w.heights[WorldData.idx(ix, iz)] = clampf(h, WorldData.H_MIN, WorldData.H_MAX)
 	_smooth_river_banks(w)
+
+
+## 丘の世界(hills)の仕上げ。sample には掛けない(見本は従来どおり)。配置物は置かない。
+## (a) 中央平地の外側になだらかな丘を3つ足す (b) 山の斜面と丘の上に森の塊を塗る (c) 川べりに砂利・土、平地に苔・土のむら。
+func _decorate_hills(w: WorldData) -> void:
+	# (a) 丘(中心・高さ・半径)。中央平地(半径 40m 程度)と川の外側に置く
+	for b in HILL_BUMPS:
+		var c: Vector2 = b[0]
+		var amp: float = b[1]
+		var r: float = b[2]
+		for iz in WorldData.N:
+			for ix in WorldData.N:
+				var p := Vector2(float(ix) - WorldData.HALF, float(iz) - WorldData.HALF)
+				var t := 1.0 - p.distance_to(c) / r
+				if t <= 0.0:
+					continue
+				var k := WorldData.idx(ix, iz)
+				w.heights[k] = minf(w.heights[k] + amp * smoothstep(0.0, 1.0, t), WorldData.H_MAX)
+
+	# (b) 森: 中央平地の外側で、川から離れた所に塊として。縁は少しずつ濃くする(255 が濃い)
+	var clump := FastNoiseLite.new()
+	clump.seed = w.seed + 2
+	clump.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	clump.frequency = 0.03
+	clump.fractal_octaves = 3
+	for iz in WorldData.N:
+		for ix in WorldData.N:
+			var p := Vector2(float(ix) - WorldData.HALF, float(iz) - WorldData.HALF)
+			if p.length() < HILL_FOREST_MIN_DIST or absf(p.x - _river_x(p.y)) < HILL_RIVER_CLEAR:
+				continue
+			var f := smoothstep(-0.15, 0.1, clump.get_noise_2d(p.x, p.y))
+			if f > 0.0:
+				w.forest[WorldData.idx(ix, iz)] = int(f * 255.0)
+
+	# (c) 地表: 川べりは砂利(川の縁のすぐ外)と土(その外)。平地には苔と土のむら
+	_paint(w, 2, Rect2(-66, -128, 52, 256), 1.0, func(p: Vector2) -> bool:
+		var d := absf(p.x - _river_x(p.y))
+		return d >= RIVER_HALF_WIDTH and d <= RIVER_HALF_WIDTH + 3.0)
+	_paint(w, 1, Rect2(-66, -128, 52, 256), 1.0, func(p: Vector2) -> bool:
+		var d := absf(p.x - _river_x(p.y))
+		return d > RIVER_HALF_WIDTH + 3.0 and d <= RIVER_HALF_WIDTH + 6.0)
+	var moss := FastNoiseLite.new()
+	moss.seed = w.seed + 3
+	moss.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	moss.frequency = 0.05
+	var soil := FastNoiseLite.new()
+	soil.seed = w.seed + 4
+	soil.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	soil.frequency = 0.04
+	for iz in WorldData.N:
+		for ix in WorldData.N:
+			var p := Vector2(float(ix) - WorldData.HALF, float(iz) - WorldData.HALF)
+			if p.length() > HILL_FLAT_PATCH_DIST or absf(p.x - _river_x(p.y)) < RIVER_HALF_WIDTH + 6.0:
+				continue
+			var tm := smoothstep(0.3, 0.5, moss.get_noise_2d(p.x, p.y)) * 0.8
+			if tm > 0.0:
+				_blend_surface(w, ix, iz, 4, tm)
+			var ts := smoothstep(0.35, 0.55, soil.get_noise_2d(p.x, p.y)) * 0.7
+			if ts > 0.0:
+				_blend_surface(w, ix, iz, 1, ts)
 
 
 static func _river_x(z: float) -> float:

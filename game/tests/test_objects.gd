@@ -6,6 +6,11 @@ extends SceneTree
 var _pass := 0
 var _fail := 0
 
+## 見本の世界の seed(固定)。旧版の木の手前の試験は、この seed のような「開始点が別の木に重なる」場合に落ちた。
+const TEST_SEED := 6
+## 歩行体(半径0.3m)と幹(半径0.35m)が触れる距離は 0.65m。これを下回ったら木の中へ入っている。
+const TRUNK_CONTACT_MIN := 0.6
+
 
 func _init() -> void:
 	# autoload(Game / Catalog)の _ready を待つ
@@ -23,7 +28,7 @@ func _init() -> void:
 	root.add_child(main)
 	await process_frame
 	await process_frame
-	game.new_world("sample")
+	game.new_world("sample", "", TEST_SEED)
 	await process_frame
 	var world_id: String = game.world.id
 
@@ -211,40 +216,43 @@ func _run(game: Node, main: Node) -> void:
 	_check(wet == 0, "水面の下に木が無い (%d)" % wet)
 
 	# 歩行時の幹の当たり: 統合のままの歩行体(main.walk_mode。group "player" の CharacterBody3D)を使う
-	# 世界の端の木は歩行の開始が世界の外になるので、内側の木を使う
-	var inner: Array = []
-	for t in trunks:
-		if absf(t.x) < 100.0 and absf(t.z) < 100.0:
-			inner.append(t)
-	if inner.size() > 0:
-		var walk = main.walk_mode
-		var tp: Vector3 = inner[0]
+	# 試験の木は、周りに他の幹や物が無いものを選ぶ。他の木の当たりに開始点が重なると押し出されて横へ滑り、
+	# 木の手前で止まらなくなる(滑って回り込むのは正しい動き。その場合は止まる試験の前提から外す)。
+	var walk = main.walk_mode
+	var tp := _pick_clear_tree(game.world, trunks)
+	_check(tp != Vector3.ZERO, "歩行の試験に使える木(周りに他の幹や物が無い)がある")
+	if tp != Vector3.ZERO:
 		game.set_mode("walk")
 		await process_frame
 		_hide_walk_hud(main)
-		walk.global_position = Vector3(tp.x + 2.5, 0.0, tp.z)
-		await create_timer(0.35).timeout
 		var pool: Array = forest.get("_trunk_bodies")
+		# 正面から歩く: 木の手前で止まる
+		var r: Dictionary = await _walk_trial(main, game, forest, Vector3(tp.x - 2.0, 0.0, tp.z), -PI * 0.5, 90, false)
+		var stop_x: float = (r["pos"] as Vector3).x
 		var active := 0
 		for b in pool:
 			if (b as StaticBody3D).collision_layer == 2:
 				active += 1
 		_check(pool.size() == 24 and active >= 1 and active <= 24, "歩行中は近くの木に当たり(最大24) (%d)" % active)
-
-		# 実際にぶつかる: 木の手前から木へ向けて歩くと、木の中へ入らずに止まる
-		walk.first_person = true
-		walk.yaw = -PI * 0.5           # 向き +X(forward = (-sin yaw, 0, -cos yaw))
-		walk.rotation.y = walk.yaw
-		walk.global_position = Vector3(tp.x - 2.0, game.world.height_at(tp.x - 2.0, tp.z) + 0.2, tp.z)
-		await create_timer(0.35).timeout
-		for i in 90:
-			walk.set_move_vector(Vector2(0.0, 1.0))
-			await physics_frame
-		walk.set_move_vector(Vector2.ZERO)
-		var stop_x: float = walk.global_position.x
-		_check(stop_x < tp.x - 0.5 and stop_x > tp.x - 2.0 + 0.2,
+		_check(stop_x > tp.x - 0.75 and stop_x < tp.x - 0.55,
 			"木に当たって止まる (止まった x=%.2f / 木の x=%.2f)" % [stop_x, tp.x])
-
+		_check(float(r["min_d"]) >= TRUNK_CONTACT_MIN, "歩きで木の中へ入らない (最短 %.3f m)" % float(r["min_d"]))
+		# 走り(6m/s)でも木の手前で止まる
+		r = await _walk_trial(main, game, forest, Vector3(tp.x - 2.0, 0.0, tp.z), -PI * 0.5, 60, true)
+		stop_x = (r["pos"] as Vector3).x
+		_check(stop_x > tp.x - 0.75 and stop_x < tp.x - 0.55, "走っても木の手前で止まる (止まった x=%.2f)" % stop_x)
+		_check(float(r["min_d"]) >= TRUNK_CONTACT_MIN, "走りで木の中へ入らない (最短 %.3f m)" % float(r["min_d"]))
+		# 正面から少しずれて歩く: 横へ滑っても木の中へは入らない
+		r = await _walk_trial(main, game, forest, Vector3(tp.x - 2.0, 0.0, tp.z + 0.2), -PI * 0.5, 90, false)
+		_check(float(r["min_d"]) >= TRUNK_CONTACT_MIN, "少しずれて当たっても木の中へ入らない (最短 %.3f m)" % float(r["min_d"]))
+		# 木の無い道は通れる
+		var path := _find_clear_path(forest, game.world)
+		_check(path != Vector3.ZERO, "木も物も無い平らな 6m の道がある")
+		if path != Vector3.ZERO:
+			r = await _walk_trial(main, game, forest, path, -PI * 0.5, 90, false)
+			var walked: float = (r["pos"] as Vector3).x - path.x
+			_check(walked >= 4.0 and float(r["min_d"]) >= TRUNK_CONTACT_MIN,
+				"木の無い道は歩いて通れる (進んだ %.2f m)" % walked)
 		game.set_mode("edit")
 		await process_frame
 		await create_timer(0.35).timeout
@@ -376,6 +384,86 @@ func _hide_walk_hud(main: Node) -> void:
 	var walk_hud = hud.get("_walk") if hud != null else null
 	if walk_hud != null:
 		walk_hud.visible = false
+
+
+## 周りに他の幹や物が無い木を選ぶ(配列の順に最初に見つかったもの)。無ければ Vector3.ZERO。
+func _pick_clear_tree(world: WorldData, trunks: Array) -> Vector3:
+	for t in trunks:
+		var tp: Vector3 = t
+		if absf(tp.x) > 60.0 or absf(tp.z) > 60.0 or tp.y < WorldData.WATER_LEVEL + 0.5:
+			continue
+		if _lane_count(trunks, tp.x - 3.0, tp.x + 1.0, tp.z) == 1 and _no_objects_near(world, tp.x, tp.z, 7.0):
+			return tp
+	return Vector3.ZERO
+
+
+## 平らで、幹も物も無い 6m の道の始点を探す(歩いて通れることの確認用)。無ければ Vector3.ZERO。
+func _find_clear_path(forest: Node, world: WorldData) -> Vector3:
+	var x := -90.0
+	while x <= 90.0:
+		var z := -90.0
+		while z <= 90.0:
+			var near: Array = forest.get_trunks_near(Vector3(x + 3.0, 0.0, z), 4.5)
+			if _flat_run(world, x, z) and _lane_count(near, x - 0.5, x + 6.0, z) == 0 \
+					and _no_objects_near(world, x + 3.0, z, 7.0):
+				return Vector3(x, 0.0, z)
+			z += 3.0
+		x += 3.0
+	return Vector3.ZERO
+
+
+## x0〜x1 の帯(z の ±1.2m)にある幹の数。
+func _lane_count(trunks: Array, x0: float, x1: float, z: float) -> int:
+	var n := 0
+	for t in trunks:
+		var p: Vector3 = t
+		if p.x >= x0 and p.x <= x1 and absf(p.z - z) < 1.2:
+			n += 1
+	return n
+
+
+## (x, z) から r(m)以内に、配置物(木を含む)が無いか。
+func _no_objects_near(world: WorldData, x: float, z: float, r: float) -> bool:
+	for obj in world.objects:
+		if absf(float(obj["x"]) - x) < r and absf(float(obj["z"]) - z) < r:
+			return false
+	return true
+
+
+## x から 6m 先まで、水に近くなく、0.5m 進むごとの高さの差が 0.1m 以下か。
+func _flat_run(world: WorldData, x: float, z: float) -> bool:
+	var prev := world.height_at(x, z)
+	if prev < WorldData.WATER_LEVEL + 0.5:
+		return false
+	for k in range(1, 13):
+		var h := world.height_at(x + 0.5 * float(k), z)
+		if absf(h - prev) > 0.1:
+			return false
+		prev = h
+	return true
+
+
+## 歩行体を start に置き、yaw の向きへ n 物理フレーム歩く(run で走る)。
+## 戻り値: "pos" は止まった位置、"min_d" は途中で幹の中心へ最も近づいた距離(触れ始めは 0.65m)。
+func _walk_trial(main: Node, game: Node, forest: Node, start: Vector3, yaw: float, n: int, run: bool) -> Dictionary:
+	var walk = main.walk_mode
+	walk.yaw = yaw
+	walk.rotation.y = yaw
+	walk.global_position = Vector3(start.x, game.world.height_at(start.x, start.z) + 0.2, start.z)
+	walk.velocity = Vector3.ZERO
+	await create_timer(0.35).timeout   # 幹の当たりは 0.25 秒ごとに更新される
+	walk.set_run(run)
+	var min_d := INF
+	for i in n:
+		walk.set_move_vector(Vector2(0.0, 1.0))
+		await physics_frame
+		var p: Vector3 = walk.global_position
+		for t in forest.get_trunks_near(p, 1.5):
+			var d: float = Vector2(t.x - p.x, t.z - p.z).length()
+			min_d = minf(min_d, d)
+	walk.set_move_vector(Vector2.ZERO)
+	walk.set_run(false)
+	return {"pos": walk.global_position, "min_d": min_d}
 
 
 ## 物のノードの中で、材質名に対応する表面の上書き材質を返す。

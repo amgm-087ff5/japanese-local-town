@@ -8,6 +8,7 @@ const LEAF_KINDS := ["sugi", "matsu", "take", "sakura", "kaede"]
 const DECIDUOUS_KINDS := ["sakura", "kaede"]
 const FOLIAGE_SHADER := preload("res://scripts/objects/foliage.gdshader")
 const GLOW_SHADER := preload("res://scripts/objects/glow.gdshader")
+const ROOF_SHADER := preload("res://scripts/objects/roof.gdshader")
 
 const BODY_LAYER := 2
 const HIGHLIGHT_COLOR := Color(0.784, 0.271, 0.173)   # 朱 #C8452C
@@ -51,7 +52,7 @@ func _process(delta: float) -> void:
 # ---------------------------------------------------------------- 共有の材質
 
 ## 材質名から共有の Material を返す。対象外の名前は null(元の材質をそのまま使う)。
-static func shared_material(mat_name: String) -> Material:
+static func shared_material(mat_name: String, orig: Material = null) -> Material:
 	if _shared.has(mat_name):
 		return _shared[mat_name]
 	var m: Material = null
@@ -59,6 +60,8 @@ static func shared_material(mat_name: String) -> Material:
 		var k := LEAF_KINDS.find(mat_name.substr(5))
 		if k >= 0:
 			m = _leaf_material(k)
+	elif mat_name.begins_with("roof_"):
+		m = _roof_material(orig)
 	elif mat_name == "glow_lantern":
 		m = _glow_material(true)
 	elif mat_name == "glow_window":
@@ -107,7 +110,7 @@ static func apply_materials(root: Node) -> void:
 				var orig := mi.mesh.surface_get_material(s)
 				if orig == null:
 					continue
-				var shared := shared_material(orig.resource_name)
+				var shared := shared_material(orig.resource_name, orig)
 				if shared != null:
 					mi.set_surface_override_material(s, shared)
 	for c in root.get_children():
@@ -395,10 +398,26 @@ static func _ghostify(n: Node) -> void:
 		_ghostify(c)
 
 
+## 屋根の材質(roof.gdshader)。元の色と粗さを引き継ぎ、雪は g_snow で決まる。
+static func _roof_material(orig: Material) -> ShaderMaterial:
+	var m := ShaderMaterial.new()
+	m.shader = ROOF_SHADER
+	var c := Color(0.5, 0.5, 0.5)
+	var r := 0.8
+	if orig is BaseMaterial3D:
+		c = (orig as BaseMaterial3D).albedo_color
+		r = (orig as BaseMaterial3D).roughness
+	m.set_shader_parameter("albedo_color", c)
+	m.set_shader_parameter("roughness_base", r)
+	return m
+
+
 static func _ghost_material(src: Material) -> StandardMaterial3D:
 	var g := StandardMaterial3D.new()
 	if src is StandardMaterial3D:
 		g.albedo_color = (src as StandardMaterial3D).albedo_color
+	elif src is ShaderMaterial and (src as ShaderMaterial).get_shader_parameter("albedo_color") is Color:
+		g.albedo_color = (src as ShaderMaterial).get_shader_parameter("albedo_color")
 	else:
 		g.albedo_color = Color(0.92, 0.92, 0.88)
 	g.albedo_color.a = GHOST_ALPHA

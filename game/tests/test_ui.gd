@@ -50,12 +50,14 @@ func _run() -> void:
 	await get_tree().process_frame
 	_check_layout("縦 edit", PORTRAIT)
 	_check_touch_sizes("縦 edit")
+	_check_text_fit("縦 edit")
 
 	_section("横 1560x720: 配置・重なり・画面内")
 	_hud._relayout(LANDSCAPE)
 	await get_tree().process_frame
 	_check_layout("横 edit", LANDSCAPE)
 	_check_touch_sizes("横 edit")
+	_check_text_fit("横 edit")
 
 	_section("状態バー・スナップ表示(縦は世界名を出さず時刻チップを広げる。スナップは全幅の行で ON/OFF を表示)")
 	_hud._relayout(PORTRAIT)
@@ -86,9 +88,27 @@ func _run() -> void:
 	_check(_hud._terrain.visible and not _hud._palette.visible, "地形モードは地形パネルだけ出る")
 	_hud._relayout(PORTRAIT)
 	_check_layout("縦 terrain", PORTRAIT)
+	_check_text_fit("縦 terrain")
 	_hud._relayout(LANDSCAPE)
 	_check_layout("横 terrain", LANDSCAPE)
 	_check_touch_sizes("横 terrain")
+	_check_text_fit("横 terrain")
+	await get_tree().process_frame
+	var sheet_rect := _hud._sheet_scroll.get_global_rect()
+	_check(sheet_rect.encloses(_hud._terrain._radius_slider.get_global_rect()) and sheet_rect.encloses(_hud._terrain._strength_slider.get_global_rect()),
+		"横 terrain: ブラシ・強さのスライダが (スクロールなしで) 見える シート%s ブラシ%s 強さ%s" % [
+			sheet_rect, _hud._terrain._radius_slider.get_global_rect(), _hud._terrain._strength_slider.get_global_rect()])
+	# 地表の色見本つきチップも同じ検査を通す
+	_hud._terrain._on_tool("surface")
+	await get_tree().process_frame
+	_check_text_fit("横 terrain・地表")
+	_hud._terrain._on_tool("raise")
+	_hud._relayout(PORTRAIT)
+	await get_tree().process_frame
+	_hud._terrain._on_tool("surface")
+	await get_tree().process_frame
+	_check_text_fit("縦 terrain・地表")
+	_hud._terrain._on_tool("raise")
 
 	_section("パレット")
 	_check(_hud.palette_card_count() == Catalog.items().size(), "パレットのアイテム数 = Catalog.items().size()")
@@ -204,6 +224,27 @@ func _check_touch_sizes(label: String) -> void:
 			bad += 1
 			print("  小さいボタン: %s %s" % [b.text, r.size])
 	_check(bad == 0, "%s: 見えているボタンが 84px 以上 (%d 件)" % [label, bad])
+
+
+## 見えているボタンは、文字幅(左右の余白を含む)がボタンの幅に収まる(縦横どちらでも文字が切れない)。
+func _check_text_fit(label: String) -> void:
+	var buttons: Array[BaseButton] = []
+	_collect_buttons(_hud, buttons)
+	var bad := 0
+	for b in buttons:
+		var btn := b as Button
+		if btn == null or btn.text.is_empty():
+			continue
+		var font := btn.get_theme_font("font")
+		var fs := btn.get_theme_font_size("font_size")
+		var text_w := font.get_string_size(btn.text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+		var sb := btn.get_theme_stylebox("normal")
+		var pad := sb.get_minimum_size().x if sb != null else 0.0
+		var inner := btn.size.x - pad
+		if text_w > inner + 0.5:
+			bad += 1
+			print("  文字が切れる: 「%s」 文字 %.0f / 内幅 %.0f" % [btn.text, text_w, inner])
+	_check(bad == 0, "%s: 見えているボタンの文字が切れない (%d 件)" % [label, bad])
 
 
 func _collect_buttons(node: Node, out: Array[BaseButton]) -> void:

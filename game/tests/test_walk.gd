@@ -47,6 +47,7 @@ func _run() -> void:
 	await _test_steps()
 	await _test_sample()
 	await _test_spot()
+	await _test_cam_spot()
 
 	_cleanup()
 	for s in _unverified:
@@ -248,6 +249,50 @@ func _test_spot() -> void:
 	_check(worst >= 0.49, "どの物の占有領域からも 0.5m 以上離れる (最も近い %.2f m)" % worst)
 	_check(p2.distance_to(Vector2(0.0, -30.0)) < 12.0, "中心から遠くへ飛ばされない")
 	_walk.set_move_vector(Vector2.ZERO)
+
+
+## 見本の世界で歩行を始めた直後、三人称カメラの位置(横・縦の後方距離と実際のカメラ)が
+## 木以外の占有領域(+1m)のどれにも入っていないこと。注視点・向きを変えて何通りか試す。
+func _test_cam_spot() -> void:
+	_section("歩行の開始位置(見本の世界): 三人称カメラの位置が物の際(+1m)に入らない")
+	await _new_world("sample")
+	# 鳥居(0, 22)の手前(南)から北へ向けると、アバターは物から3m以上離れるがカメラが鳥居の直下に入る
+	var starts := [Vector2(0.0, 0.0), Vector2(0.0, 40.0), Vector2(0.0, -30.0), Vector2(0.0, 17.0), Vector2(0.0, 15.0)]
+	var yaws := [0.0, PI * 0.5, -PI * 0.5, PI]
+	for s in starts:
+		for y in yaws:
+			_game.set_mode("edit")   # 歩行中だと enter が早期 return するため、毎回編集へ戻してから歩行を始める
+			await _frames(2)
+			await _start_walk(s.x, s.y, y)
+			if _walk.first_person:
+				_walk.toggle_view()
+				await _frames(2)
+			var cams: Array[Vector3] = [
+				_walk.global_transform * Vector3(0.0, WalkMode.TP_HEIGHT, WalkMode.TP_BACK),
+				_walk.global_transform * Vector3(0.0, WalkMode.TP_HEIGHT, WalkMode.TP_BACK_PORTRAIT),
+				_walk.camera.global_position,
+			]
+			var worst := INF
+			for c in cams:
+				worst = minf(worst, _cam_clearance(Vector2(c.x, c.z)))
+			_check(worst >= 1.0,
+				"(%.0f, %.0f) yaw %.0f°: 三人称カメラが占有領域(+1m)の外 (最も近い %.2f m)" % [s.x, s.y, rad_to_deg(y), worst])
+			_walk.set_move_vector(Vector2.ZERO)
+
+
+## 木以外の占有領域から q までの距離(q が中に入るなら 0)。
+func _cam_clearance(q: Vector2) -> float:
+	var best := INF
+	for obj in _game.get("world").objects:
+		var item: Dictionary = _catalog().get_item(str(obj["type"]))
+		if bool(item.get("tree", false)):
+			continue
+		var poly := Geom.to_world(_catalog().footprint_polygon(str(obj["type"])),
+			Vector2(float(obj["x"]), float(obj["z"])), float(obj["rot"]))
+		if Geom.point_in_polygon(q, poly):
+			return 0.0
+		best = minf(best, _dist_outline(q, poly))
+	return best
 
 
 func _dist_outline(q: Vector2, poly: PackedVector2Array) -> float:

@@ -12,6 +12,7 @@ global uniform vec4 g_leaf_kaede : source_color;
 global uniform float g_leaf_density_deciduous;
 global uniform float g_snow;
 global uniform float g_wind;
+global uniform float g_night;
 
 // 0 杉 1 松 2 竹 3 桜 4 楓
 uniform int kind = 0;
@@ -77,6 +78,10 @@ void fragment() {
 	// 塊ごとの明暗と、木ごとのわずかな色味のばらつき
 	float shade = 1.0 + shade_noise * (v_shade - 0.5) * 2.0;
 	base *= shade * (0.92 + 0.16 * v_inst);
+
+	// 夜の色味(彩度を落として青みの暗い色へ。昼は素通し)
+	float l = dot(base, vec3(0.2126, 0.7152, 0.0722));
+	base = mix(base, vec3(l) * vec3(1.02, 1.16, 0.64), g_night * 0.75) * mix(1.0, 0.55, g_night);
 
 	// 積雪: 上向きの面が白くなる
 	float up = clamp(v_normal_world.y, 0.0, 1.0);

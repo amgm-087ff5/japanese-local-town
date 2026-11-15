@@ -33,6 +33,7 @@ func _run() -> void:
 	root.add_child(_tmode)
 	_game.new_world("hills")
 	_created = _game.world.id
+	_check_hills_world()
 	# 自動保存でテストの世界が書かれないよう、タイマーを止める
 	var timer := _game.get("_save_timer") as Timer
 	if timer != null:
@@ -64,6 +65,23 @@ func _check(cond: bool, label: String) -> void:
 	else:
 		_fail += 1
 		print("  FAIL: %s" % label)
+
+
+## 丘の世界の仕上げ: 森の塊・川べりの砂利(地表 2 = splat_a の G)があり、配置物は置かない。
+func _check_hills_world() -> void:
+	_section("丘の世界の仕上げ(森・砂利・配置物なし)")
+	var w: WorldData = _game.world
+	var forest_n := 0
+	for v in w.forest:
+		if v > 0:
+			forest_n += 1
+	_check(forest_n > 0, "hills の forest>0 のセルがある (%d)" % forest_n)
+	var gravel_n := 0
+	for i in WorldData.N * WorldData.N:
+		if w.splat_a[i * 4 + 1] > 0:
+			gravel_n += 1
+	_check(gravel_n > 0, "hills に川べりの砂利がある (%d)" % gravel_n)
+	_check(w.objects.is_empty(), "hills は配置物を置かない")
 
 
 func _section(name: String) -> void:

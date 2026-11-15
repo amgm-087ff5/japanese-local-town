@@ -5,6 +5,7 @@ render_mode cull_disabled;
 global uniform vec4 g_season_grass : source_color;
 global uniform float g_snow;
 global uniform float g_wet;
+global uniform float g_night;
 
 varying vec3 w_pos;
 
@@ -19,6 +20,9 @@ void fragment() {
 	float patch = sin(w_pos.x * 0.07) * sin(w_pos.z * 0.05) * 0.05 + sin((w_pos.x + w_pos.z) * 0.19) * 0.025;
 	c *= 1.0 + patch;
 	c *= mix(1.0, 0.8, g_wet);
+	// 夜の色味(彩度を落として青みの暗い色へ)
+	float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+	c = mix(c, vec3(l) * vec3(1.02, 1.16, 0.64), g_night * 0.75) * mix(1.0, 0.55, g_night);
 	c = mix(c, vec3(0.85, 0.9, 0.93), g_snow * 0.85);
 	ALBEDO = c;
 	ROUGHNESS = 0.95;

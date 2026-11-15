@@ -9,15 +9,15 @@ const SKY_SHADER := preload("res://scripts/env/sky.gdshader")
 # 季節 0春 1夏 2秋 3冬
 const SEASON_ALT := [55.0, 78.0, 55.0, 32.0]        # 南中高度(度)
 const SEASON_HALF_DAY := [6.0, 7.0, 6.0, 5.0]        # 12時から日の出・日の入りまでの時間(春秋 6-18 / 夏 5-19 / 冬 7-17)
-const SEASON_GRASS := [Color(0.62, 0.8, 0.36), Color(0.27, 0.48, 0.22), Color(0.56, 0.5, 0.25), Color(0.52, 0.47, 0.33)]
+const SEASON_GRASS := [Color(0.62, 0.8, 0.36), Color(0.36, 0.7, 0.08), Color(0.56, 0.5, 0.25), Color(0.52, 0.47, 0.33)]
 const SEASON_SAKURA := [Color(0.96, 0.66, 0.74), Color(0.3, 0.52, 0.22), Color(0.62, 0.36, 0.18), Color(0.36, 0.26, 0.2)]
 const SEASON_KAEDE := [Color(0.6, 0.78, 0.36), Color(0.28, 0.5, 0.2), Color(0.82, 0.22, 0.12), Color(0.42, 0.22, 0.12)]
 const SEASON_DECIDUOUS := [1.0, 1.0, 1.0, 0.12]
 const EVERGREEN_BASE := [Color(0.13, 0.3, 0.17), Color(0.16, 0.34, 0.2), Color(0.42, 0.58, 0.25)]  # 杉 松 竹
 const EVERGREEN_TINT := [Color(1.05, 1.08, 1.0), Color(1.0, 1.0, 1.0), Color(1.05, 0.98, 0.9), Color(0.92, 0.98, 1.02)]
 const SEASON_ZENITH := [Color(0.36, 0.58, 0.82), Color(0.26, 0.5, 0.84), Color(0.4, 0.56, 0.74), Color(0.44, 0.58, 0.74)]
-const SEASON_HORIZON := [Color(0.84, 0.9, 0.92), Color(0.78, 0.88, 0.94), Color(0.88, 0.87, 0.82), Color(0.86, 0.9, 0.95)]
-const SEASON_MOUNTAIN := [Color(0.42, 0.55, 0.5), Color(0.3, 0.44, 0.44), Color(0.47, 0.46, 0.4), Color(0.5, 0.54, 0.6)]
+const SEASON_HORIZON := [Color(0.84, 0.9, 0.92), Color(0.8, 0.9, 0.88), Color(0.88, 0.87, 0.82), Color(0.86, 0.9, 0.95)]
+const SEASON_MOUNTAIN := [Color(0.42, 0.55, 0.5), Color(0.36, 0.5, 0.38), Color(0.47, 0.46, 0.4), Color(0.5, 0.54, 0.6)]
 const SEASON_SNOW_IDLE := 0.35                       # 冬で雪でない時の積雪(地表・山の頂)
 
 # 天気 0晴 1曇 2雨 3雪

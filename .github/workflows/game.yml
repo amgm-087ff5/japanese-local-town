@@ -1,0 +1,191 @@
+name: game
+
+on:
+  push:
+    branches: [main, "claude/**"]
+    paths:
+      - "game/**"
+      - ".github/workflows/game.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: game-ci
+  cancel-in-progress: false
+
+env:
+  GODOT_VERSION: "4.7.2"
+  # 署名証明書 SHA-256 (期待値。鍵を変えたらここも変える)
+  EXPECTED_CERT_SHA256: "68:64:C3:4E:CC:B7:1E:8B:36:9B:5B:AD:17:50:90:85:F0:D3:EC:B3:C5:A8:45:E3:DB:5F:A9:8D:35:52:09:35"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Godot binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/opt/godot
+          key: godot-${{ env.GODOT_VERSION }}-linux
+
+      - name: Install Godot binary
+        run: |
+          set -eu
+          DIR="$HOME/.local/opt/godot"
+          BIN="$DIR/Godot_v${GODOT_VERSION}-stable_linux.x86_64"
+          mkdir -p "$DIR" "$HOME/.local/bin"
+          if [ ! -x "$BIN" ]; then
+            curl -fL --retry 3 -o "$RUNNER_TEMP/godot.zip" \
+              "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+            unzip -q -o "$RUNNER_TEMP/godot.zip" -d "$DIR"
+            chmod +x "$BIN"
+          fi
+          ln -sf "$BIN" "$HOME/.local/bin/godot"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Check Godot version
+        run: |
+          V="$(godot --version)"
+          case "$V" in
+            "${GODOT_VERSION}.stable"*) echo "godot: $V" ;;
+            *) echo "::error::Godot ${GODOT_VERSION} ではありません: $V"; exit 1 ;;
+          esac
+
+      - name: Run all tests
+        env:
+          GODOT_BIN: godot
+        run: game/tools/run_all_tests.sh
+
+  android:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    outputs:
+      version_code: ${{ steps.build.outputs.version_code }}
+      cert_sha256: ${{ steps.build.outputs.cert_sha256 }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Point setup_env at JDK 17
+        run: echo "JAVA17_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
+
+      - name: Cache Godot binary and export templates
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.local/opt/godot
+            ~/.local/share/godot/export_templates
+          key: godot-android-${{ env.GODOT_VERSION }}-${{ hashFiles('game/tools/setup_env.sh') }}
+
+      - name: Set up Godot, export templates, Android SDK
+        env:
+          SKIP_APT: "1"
+        run: |
+          game/tools/setup_env.sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Check signing secrets
+        env:
+          GAME_KEYSTORE_B64: ${{ secrets.GAME_KEYSTORE_B64 }}
+          GAME_KEYSTORE_PASSWORD: ${{ secrets.GAME_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -z "$GAME_KEYSTORE_B64" ]; then
+            echo "::error::Secret GAME_KEYSTORE_B64 が未設定です。Settings > Secrets and variables > Actions で登録してください (デバッグ鍵では署名しません)"
+            exit 1
+          fi
+          if [ -z "$GAME_KEYSTORE_PASSWORD" ]; then
+            echo "::error::Secret GAME_KEYSTORE_PASSWORD が未設定です。Settings > Secrets and variables > Actions で登録してください (デバッグ鍵では署名しません)"
+            exit 1
+          fi
+
+      - name: Restore keystore and check it opens
+        env:
+          GAME_KEYSTORE_B64: ${{ secrets.GAME_KEYSTORE_B64 }}
+          GAME_KEYSTORE_PASSWORD: ${{ secrets.GAME_KEYSTORE_PASSWORD }}
+        run: |
+          set -eu
+          KS="$RUNNER_TEMP/jlt.keystore"
+          printf '%s' "$GAME_KEYSTORE_B64" | base64 -d > "$KS"
+          chmod 600 "$KS"
+          # パスワードは環境変数経由で渡す (ログに出さない)
+          if ! keytool -list -keystore "$KS" -storetype PKCS12 -storepass:env GAME_KEYSTORE_PASSWORD -alias jlt >/dev/null 2>&1; then
+            echo "::error::署名鍵を開けないか alias jlt がありません。GAME_KEYSTORE_B64 と GAME_KEYSTORE_PASSWORD の組み合わせを確認してください"
+            exit 1
+          fi
+          echo "GODOT_ANDROID_KEYSTORE_RELEASE_PATH=$KS" >> "$GITHUB_ENV"
+          echo "GODOT_ANDROID_KEYSTORE_RELEASE_USER=jlt" >> "$GITHUB_ENV"
+
+      - name: Build APK (signed with the fixed key)
+        id: build
+        env:
+          GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD: ${{ secrets.GAME_KEYSTORE_PASSWORD }}
+        run: |
+          set -eu
+          mkdir -p "$RUNNER_TEMP/apk"
+          game/tools/build_apk.sh "$RUNNER_TEMP/apk/chinju-no-sato.apk"
+
+      - name: Remove keystore copy
+        if: always()
+        run: rm -f "$RUNNER_TEMP/jlt.keystore"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chinju-no-sato-apk
+          path: ${{ runner.temp }}/apk/chinju-no-sato.apk
+          retention-days: 30
+          if-no-files-found: error
+
+  release:
+    needs: android
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: game-latest
+      VERSION_CODE: ${{ needs.android.outputs.version_code }}
+      CERT_SHA: ${{ needs.android.outputs.cert_sha256 }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: chinju-no-sato-apk
+          path: dist
+
+      - name: Replace the fixed prerelease
+        run: |
+          set -eu
+          APK="dist/chinju-no-sato.apk"
+          if [ ! -f "$APK" ]; then
+            echo "::error::APK が見つかりません ($APK)"
+            exit 1
+          fi
+          NOTES_FILE="$RUNNER_TEMP/notes.md"
+          {
+            echo "CI が main の最新コミットから作ったテスト用 APK です。"
+            echo ""
+            echo "- applicationId: io.github.amgm087ff5.japaneselocaltown"
+            echo "- versionName: 0.1.0"
+            echo "- versionCode: ${VERSION_CODE}"
+            echo "- 署名証明書 SHA-256: ${CERT_SHA}"
+            echo "- コミット: ${GITHUB_SHA}"
+            echo ""
+            echo "インストールは Android の「提供元不明のアプリ」を許可して APK を開きます。詳細は game/docs/build.md。"
+          } > "$NOTES_FILE"
+          # 固定タグのプレリリースを作り直す (タグも消す)
+          gh release delete "$TAG" --cleanup-tag --yes || true
+          gh release create "$TAG" "$APK" --prerelease --target "$GITHUB_SHA" \
+            --title "鎮守の里 最新ビルド (versionCode ${VERSION_CODE})" \
+            --notes-file "$NOTES_FILE"

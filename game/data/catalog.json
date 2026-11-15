@@ -1,0 +1,832 @@
+{
+  "items": [
+    {
+      "id": "haiden",
+      "name": "拝殿",
+      "category": "shrine",
+      "model": "res://assets/models/haiden.glb",
+      "footprint": [
+        10.0,
+        10.8
+      ],
+      "colliders": [
+        {
+          "pos": [
+            0.0,
+            2.48,
+            0.0
+          ],
+          "size": [
+            8.8,
+            4.95,
+            6.0
+          ]
+        }
+      ],
+      "height": 7.49,
+      "walkable": false,
+      "tree": false,
+      "order": 10
+    },
+    {
+      "id": "honden",
+      "name": "本殿",
+      "category": "shrine",
+      "model": "res://assets/models/honden.glb",
+      "footprint": [
+        5.6,
+        6.8
+      ],
+      "colliders": [
+        {
+          "pos": [
+            0.0,
+            2.1,
+            0.0
+          ],
+          "size": [
+            4.4,
+            4.2,
+            3.6
+          ]
+        }
+      ],
+      "height": 6.46,
+      "walkable": false,
+      "tree": false,
+      "order": 20
+    },
+    {
+      "id": "torii",
+      "name": "鳥居",
+      "category": "shrine",
+      "model": "res://assets/models/torii.glb",
+      "footprint": [
+        4.6,
+        1.0
+      ],
+      "colliders": [
+        {
+          "pos": [
+            -1.75,
+            2.05,
+            0.0
+          ],
+          "size": [
+            0.4,
+            4.1,
+            0.4
+          ]
+        },
+        {
+          "pos": [
+            1.75,
+            2.05,
+            0.0
+          ],
+          "size": [
+            0.4,
+            4.1,
+            0.4
+          ]
+        }
+      ],
+      "height": 4.44,
+      "walkable": false,
+      "tree": false,
+      "order": 30
+    },
+    {
+      "id": "torii_ishi",
+      "name": "鳥居(石)",
+      "category": "shrine",
+      "model": "res://assets/models/torii_ishi.glb",
+      "footprint": [
+        4.6,
+        1.0
+      ],
+      "colliders": [
+        {
+          "pos": [
+            -1.75,
+            2.05,
+            0.0
+          ],
+          "size": [
+            0.4,
+            4.1,
+            0.4
+          ]
+        },
+        {
+          "pos": [
+            1.75,
+            2.05,
+            0.0
+          ],
+          "size": [
+            0.4,
+            4.1,
+            0.4
+          ]
+        }
+      ],
+      "height": 4.44,
+      "walkable": false,
+      "tree": false,
+      "order": 40
+    },
+    {
+      "id": "toro",
+      "name": "灯籠",
+      "category": "shrine",
+      "model": "res://assets/models/toro.glb",
+      "footprint": [
+        0.62,
+        0.62
+      ],
+      "colliders": [
+        {
+          "pos": [
+            0.0,
+            0.6,
+            0.0
+          ],
+          "size": [
+            0.64,
+            1.2,
+            0.64
+          ]
+        }
+      ],
+      "height": 2.11,
+      "walkable": false,
+      "glow": "lantern",
+      "tree": false,
+      "order": 50
+    },
+    {
+      "id": "komainu_a",
+      "name": "狛犬(阿)",
+      "category": "shrine",
+      "model": "res://assets/models/komainu_a.glb",
+      "footprint": [
+        0.7,
+        0.7
+      ],
+      "colliders": [
+        {
+          "pos": [
+            0.0,
+            0.7,
+            0.0
+          ],
+          "size": [
+            0.7,
+            1.4,
+            0.7
+          ]
+        }
+      ],
+      "height": 1.5,
+      "walkable": false,
+      "tree": false,
+      "order": 60
+    },
+    {
+      "id": "komainu_un",
+      "name": "狛犬(吽)",
+      "category": "shrine",
+      "model": "res://assets/models/komainu_un.glb",
+      "footprint": [
+        0.7,
+        0.7
+      ],
+      "colliders": [
+        {
+          "pos": [
+            0.0,
+            0.7,
+            0.0
+          ],
+          "size": [
+            0.7,
+            1.4,
+            0.7
+          ]
+        }
+      ],
+      "height": 1.5,
+      "walkable": false,
+      "tree": false,
+      "order": 70
+    },
+    {
+      "id": "chozuya",
+      "name": "手水舎",
+      "category": "shrine",
+      "model": "res://assets/models/chozuya.glb",
+      "footprint": [
+        3.2,
+        2.6
+      ],
+      "colliders": [
+        {
+          "pos": [
+            -1.25,
+            1.25,
+            0.85
+          ],
+          "size": [
+            0.3,
+            2.5,
+            0.3
+          ]
+        },
+        {
+          "pos": [
+            -1.25,
+            1.25,
+            -0.85
+          ],
+          "size": [
+            0.3,
+            2.5,
+            0.3
+          ]
+        },
+        {
+          "pos": [
+            1.25,
+            1.25,
+            0.85
+          ],
+          "size": [
+            0.3,
+            2.5,
+            0.3
+          ]
+        },
+        {
+          "pos": [
+            1.25,
+            1.25,
+            -0.85
+          ],
+          "size": [
+            0.3,
+            2.5,
+            0.3
+          ]
+        },
+        {
+          "pos": [
+            0.0,
+            0.3,
+            0.0
+          ],
+          "size": [
+            1.6,
+            0.6,
+            1.0
+          ]
+        }
+      ],
+      "height": 3.5,
+      "walkable": false,
+      "tree": false,
+      "order": 80
+    },
+    {
+      "id": "shamusho",
+      "name": "社務所",
+      "category": "shrine",
+      "model": "res://assets/models/shamusho.glb",
+      "footprint": [
+        8.0,
+        5.0
+      ],
+      "colliders": [
+        {
+          "pos": [
+            0.0,
+            1.6,
+            0.0
+          ],
+          "size": [
+            7.2,
+            3.2,
+            4.2
+          ]
+        }
+      ],
+      "height": 4.62,
+      "walkable": false,
+      "glow": "window",
+      "tree": false,
+      "order": 90
+    },
+    {
+      "id": "tamagaki",
+      "name": "玉垣",
+      "category": "shrine",
+      "model": "res://assets/models/tamagaki.glb",
+      "footprint": [
+        3.0,
+        0.3
+      ],
+      "colliders": [
+        {
+          "pos": [
+            0.0,
+            0.55,
+            0.0
+          ],
+          "size": [
+            3.0,
+            1.1,
+            0.3
+          ]
+        }
+      ],
+      "height": 1.11,
+      "walkable": false,
+      "tree": false,
+      "order": 100
+    },
+    {
+      "id": "ishidan",
+      "name": "石段",
+      "category": "shrine",
+      "model": "res://assets/models/ishidan.glb",
+      "footprint": [
+        3.0,
+        3.0
+      ],
+      "colliders": [
+        {
+          "pos": [
+            0.0,
+            0.23,
+            1.05
+          ],
+          "size": [
+            3.0,
+            0.45,
+            0.9
+          ]
+        },
+        {
+          "pos": [
+            0.0,
+            0.45,
+            0.15
+          ],
+          "size": [
+            3.0,
+            0.9,
+            0.9
+          ]
+        },
+        {
+          "pos": [
+            0.0,
+            0.75,
+            -0.9
+          ],
+          "size": [
+            3.0,
+            1.5,
+            1.2
+          ]
+        }
+      ],
+      "height": 1.5,
+      "walkable": false,
+      "tree": false,
+      "order": 110
+    },
+    {
+      "id": "hashi",
+      "name": "太鼓橋",
+      "category": "shrine",
+      "model": "res://assets/models/hashi.glb",
+      "footprint": [
+        2.4,
+        6.4
+      ],
+      "colliders": [
+        {
+          "pos": [
+            0.0,
+            0.4,
+            2.25
+          ],
+          "size": [
+            2.2,
+            0.8,
+            1.5
+          ]
+        },
+        {
+          "pos": [
+            0.0,
+            0.68,
+            0.75
+          ],
+          "size": [
+            2.2,
+            1.35,
+            1.5
+          ]
+        },
+        {
+          "pos": [
+            0.0,
+            0.68,
+            -0.75
+          ],
+          "size": [
+            2.2,
+            1.35,
+            1.5
+          ]
+        },
+        {
+          "pos": [
+            0.0,
+            0.4,
+            -2.25
+          ],
+          "size": [
+            2.2,
+            0.8,
+            1.5
+          ]
+        },
+        {
+          "pos": [
+            -1.05,
+            1.1,
+            1.5
+          ],
+          "size": [
+            0.1,
+            2.2,
+            3.0
+          ]
+        },
+        {
+          "pos": [
+            -1.05,
+            1.1,
+            -1.5
+          ],
+          "size": [
+            0.1,
+            2.2,
+            3.0
+          ]
+        },
+        {
+          "pos": [
+            1.05,
+            1.1,
+            1.5
+          ],
+          "size": [
+            0.1,
+            2.2,
+            3.0
+          ]
+        },
+        {
+          "pos": [
+            1.05,
+            1.1,
+            -1.5
+          ],
+          "size": [
+            0.1,
+            2.2,
+            3.0
+          ]
+        }
+      ],
+      "height": 2.24,
+      "walkable": false,
+      "tree": false,
+      "order": 120
+    },
+    {
+      "id": "jizo",
+      "name": "地蔵",
+      "category": "shrine",
+      "model": "res://assets/models/jizo.glb",
+      "footprint": [
+        0.5,
+        0.5
+      ],
+      "colliders": [
+        {
+          "pos": [
+            0.0,
+            0.45,
+            0.0
+          ],
+          "size": [
+            0.5,
+            0.9,
+            0.5
+          ]
+        }
+      ],
+      "height": 0.9,
+      "walkable": false,
+      "tree": false,
+      "order": 130
+    },
+    {
+      "id": "sugi",
+      "name": "杉",
+      "category": "nature",
+      "model": "res://assets/models/sugi.glb",
+      "footprint": [
+        1.2,
+        1.2
+      ],
+      "colliders": [
+        {
+          "pos": [
+            0.0,
+            1.0,
+            0.0
+          ],
+          "size": [
+            0.4,
+            2.0,
+            0.4
+          ]
+        }
+      ],
+      "height": 14.0,
+      "walkable": false,
+      "tree": true,
+      "order": 10
+    },
+    {
+      "id": "sakura",
+      "name": "桜",
+      "category": "nature",
+      "model": "res://assets/models/sakura.glb",
+      "footprint": [
+        1.2,
+        1.2
+      ],
+      "colliders": [
+        {
+          "pos": [
+            0.0,
+            1.0,
+            0.0
+          ],
+          "size": [
+            0.4,
+            2.0,
+            0.4
+          ]
+        }
+      ],
+      "height": 6.0,
+      "walkable": false,
+      "tree": true,
+      "order": 20
+    },
+    {
+      "id": "kaede",
+      "name": "楓",
+      "category": "nature",
+      "model": "res://assets/models/kaede.glb",
+      "footprint": [
+        1.2,
+        1.2
+      ],
+      "colliders": [
+        {
+          "pos": [
+            0.0,
+            1.0,
+            0.0
+          ],
+          "size": [
+            0.4,
+            2.0,
+            0.4
+          ]
+        }
+      ],
+      "height": 5.6,
+      "walkable": false,
+      "tree": true,
+      "order": 30
+    },
+    {
+      "id": "matsu",
+      "name": "松",
+      "category": "nature",
+      "model": "res://assets/models/matsu.glb",
+      "footprint": [
+        1.2,
+        1.2
+      ],
+      "colliders": [
+        {
+          "pos": [
+            0.0,
+            1.0,
+            0.0
+          ],
+          "size": [
+            0.4,
+            2.0,
+            0.4
+          ]
+        }
+      ],
+      "height": 8.05,
+      "walkable": false,
+      "tree": true,
+      "order": 40
+    },
+    {
+      "id": "take",
+      "name": "竹",
+      "category": "nature",
+      "model": "res://assets/models/take.glb",
+      "footprint": [
+        1.2,
+        1.2
+      ],
+      "colliders": [
+        {
+          "pos": [
+            0.0,
+            1.0,
+            0.0
+          ],
+          "size": [
+            0.4,
+            2.0,
+            0.4
+          ]
+        }
+      ],
+      "height": 7.51,
+      "walkable": false,
+      "tree": true,
+      "order": 50
+    },
+    {
+      "id": "iwa_l",
+      "name": "岩(大)",
+      "category": "nature",
+      "model": "res://assets/models/iwa_l.glb",
+      "footprint": [
+        2.87,
+        2.83
+      ],
+      "colliders": [
+        {
+          "pos": [
+            -0.03,
+            0.79,
+            0.0
+          ],
+          "size": [
+            2.47,
+            1.57,
+            2.43
+          ]
+        }
+      ],
+      "height": 1.97,
+      "walkable": false,
+      "tree": false,
+      "order": 60
+    },
+    {
+      "id": "iwa_s",
+      "name": "岩(小)",
+      "category": "nature",
+      "model": "res://assets/models/iwa_s.glb",
+      "footprint": [
+        1.17,
+        1.13
+      ],
+      "colliders": [
+        {
+          "pos": [
+            -0.03,
+            0.2,
+            0.01
+          ],
+          "size": [
+            0.77,
+            0.4,
+            0.73
+          ]
+        }
+      ],
+      "height": 0.5,
+      "walkable": false,
+      "tree": false,
+      "order": 70
+    },
+    {
+      "id": "ie_kawara",
+      "name": "家(瓦)",
+      "category": "town",
+      "model": "res://assets/models/ie_kawara.glb",
+      "footprint": [
+        8.0,
+        6.0
+      ],
+      "colliders": [
+        {
+          "pos": [
+            0.0,
+            1.65,
+            0.0
+          ],
+          "size": [
+            6.4,
+            3.3,
+            4.4
+          ]
+        }
+      ],
+      "height": 4.99,
+      "walkable": false,
+      "glow": "window",
+      "tree": false,
+      "order": 10
+    },
+    {
+      "id": "ie_kayabuki",
+      "name": "家(茅葺)",
+      "category": "town",
+      "model": "res://assets/models/ie_kayabuki.glb",
+      "footprint": [
+        9.0,
+        6.0
+      ],
+      "colliders": [
+        {
+          "pos": [
+            0.0,
+            1.85,
+            0.0
+          ],
+          "size": [
+            7.0,
+            3.7,
+            4.4
+          ]
+        }
+      ],
+      "height": 6.5,
+      "walkable": false,
+      "glow": "window",
+      "tree": false,
+      "order": 20
+    },
+    {
+      "id": "denchu",
+      "name": "電柱",
+      "category": "town",
+      "model": "res://assets/models/denchu.glb",
+      "footprint": [
+        1.8,
+        0.6
+      ],
+      "colliders": [
+        {
+          "pos": [
+            0.0,
+            4.0,
+            0.0
+          ],
+          "size": [
+            0.4,
+            8.0,
+            0.4
+          ]
+        }
+      ],
+      "height": 8.0,
+      "walkable": false,
+      "tree": false,
+      "order": 30
+    }
+  ]
+}

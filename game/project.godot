@@ -1,0 +1,96 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
+config_version=5
+
+[application]
+
+config/name="鎮守の里"
+config/description="和風の箱庭を作って歩く、地形と配置の箱庭ゲーム"
+config/features=PackedStringArray("4.7", "Mobile")
+config/icon="res://icon.svg"
+config/quit_on_go_back=false
+run/main_scene="res://main.tscn"
+
+[autoload]
+
+Game="*res://scripts/core/game.gd"
+Catalog="*res://scripts/core/catalog.gd"
+
+[display]
+
+window/size/viewport_width=720
+window/size/viewport_height=720
+window/size/window_width_override=720
+window/size/window_height_override=1280
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/handheld/orientation=6
+
+[input_devices]
+
+pointing/emulate_touch_from_mouse=true
+
+[layer_names]
+
+3d_physics/layer_1="terrain"
+3d_physics/layer_2="objects"
+3d_physics/layer_3="player"
+
+[rendering]
+
+renderer/rendering_method="mobile"
+renderer/rendering_method.mobile="mobile"
+textures/vram_compression/import_etc2_astc=true
+
+[shader_globals]
+
+g_season_grass={
+"type": "color",
+"value": Color(0.33, 0.5, 0.22, 1)
+}
+g_snow={
+"type": "float",
+"value": 0.0
+}
+g_wet={
+"type": "float",
+"value": 0.0
+}
+g_wind={
+"type": "float",
+"value": 0.3
+}
+g_night={
+"type": "float",
+"value": 0.0
+}
+g_leaf_density_deciduous={
+"type": "float",
+"value": 1.0
+}
+g_leaf_sugi={
+"type": "color",
+"value": Color(0.13, 0.3, 0.17, 1)
+}
+g_leaf_matsu={
+"type": "color",
+"value": Color(0.16, 0.34, 0.2, 1)
+}
+g_leaf_take={
+"type": "color",
+"value": Color(0.42, 0.58, 0.25, 1)
+}
+g_leaf_sakura={
+"type": "color",
+"value": Color(0.3, 0.52, 0.22, 1)
+}
+g_leaf_kaede={
+"type": "color",
+"value": Color(0.28, 0.5, 0.2, 1)
+}

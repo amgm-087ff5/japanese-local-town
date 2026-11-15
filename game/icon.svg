@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#F4EEDF"/>
+  <!-- 朱の鳥居 -->
+  <rect x="150" y="128" width="212" height="18" fill="#C8452C"/>
+  <path d="M132 128 Q256 96 380 128 L380 146 Q256 118 132 146 Z" fill="#C8452C"/>
+  <rect x="112" y="162" width="288" height="26" rx="6" fill="#C8452C"/>
+  <rect x="172" y="188" width="26" height="232" fill="#C8452C"/>
+  <rect x="314" y="188" width="26" height="232" fill="#C8452C"/>
+  <rect x="160" y="394" width="192" height="22" rx="4" fill="#3F6B4F"/>
+</svg>

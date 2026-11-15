@@ -299,3 +299,35 @@ UI上のタッチは Control が消費する(`_unhandled_input` で受ける)。
 - 段階0: 骨格(core 4ファイル・main・スタブ・テスト) ‖ モデル ‖ 環境構築
 - 段階1(並列): B 地形(Terrain+シェーダ+TerrainMode) / C 環境(EnvController・空・遠景・天気) / D UI(Hud・Theme) / E 配置物(ObjectLayer・Forest・葉シェーダ・CameraRig・EditMode) / F 歩行(WalkMode)
 - 段階2: 統合(main)・テスト・縦横スクリーンショット・修正 → APK・CI
+
+## 16. 実装後の差分(2026-11-15)
+
+v0.1.0 の実装（410件のテスト通過、統括確認）と、上の章との差分。コードに存在する名前だけを書く。
+
+### 16.1 追加・変更された API
+- `Game.is_dragging() -> bool` / `Game.mark_dirty()`（変更を保存キューへ）/ `Game.commit_move(uid, from_x, from_z, from_rot)`（15.1 のとおり）
+- `Game.new_world(kind, name := "", seed_value := -1)`: 第3引数は seed。0 以上なら固定（テストの再現用）。省略時は乱数
+- `Game.open_last_or_sample()`: 起動時に最後の世界を開く。無ければ見本
+- `Geom.polygons_overlap(a, b, tol := EPS)`: tol は許容の食い込み（m）。玉垣の並びは 0.01 で重なり扱いにしない
+- `ObjectLayer.outline_mesh(poly, height_fn, width)`（枠を地形の高さに沿わせる）/ `ObjectLayer.shared_material(mat_name, orig)`（種類ごとに材質を1つ共有）/ `ObjectLayer.apply_materials(root)`（名前で材質を判定）
+- `EnvController.get_global(uniform_name) -> Variant`（設定した値の読み出し）
+- `CameraRig.settle()`（慣性を止めて目標に寄せる）/ `CameraRig.reset_input()`（指の状態を消す。モード切替時）
+- `EditMode.select_object(uid)`（外から選択する。`selection_changed` を出す）
+
+### 16.2 値・表現の確定（コードの値が正）
+- 灯籠の光源（OmniLight3D）: 最大 4 個（`ObjectLayer.LIGHT_POOL = 4`、range 7m）。10章の「8個」は古い。画質「高」のみ。
+- 夜の色: `g_night`（0〜1）で葉・地表・遠景の色を灰色寄りにして暗くする。灯り（glow.gdshader）は emission = 暖色 × g_night × 強さ。
+- グローバル uniform の色は **sRGB→線形に変換して渡す**（`srgb_to_linear()`）。これを忘れると色が白飛び・濁る。
+- 屋根: `roof.gdshader`。上を向いた面だけ `g_snow` で白くし、元の色（albedo）は保つ。
+- 横画面のシートの幅: `Hud.SIDE_W = 380`（hud.gd）。設計書の 300 は古い。hud.gd の冒頭コメントにも「幅300」が残っている（要修正・未修正）。
+- 世界の読込: `world_loaded` は main・terrain・object_layer・forest・hud が購読する。
+- 追加の shader: `scripts/env/apron.gdshader`（裾野）、`scripts/objects/glow.gdshader`（灯り）、`roof.gdshader`（屋根の雪）。
+
+### 16.3 確認方法の注意
+- `godot --script` 起動では autoload 名（Game / Catalog）が解決できず Main が読めない。Main を使う確認は**シーン起動**（`tools/shot.tscn`、`tests/test_ui.tscn`）で行う。
+- テストは `tests/test_*.gd` を個別に流す（一括は `tools/run_all_tests.sh`）。`tests/tests.tscn` は作らなかった（15.5 の案は採らない）。
+
+### 16.4 設計書との名前の差（記録のみ・未修正）
+- 13章の `tools/shots.gd` は実際には `tools/shot.gd`（起動用は `tools/shot.tscn`）。
+- `export_presets.cfg` の `version/code` は、実ファイルでは `29911802`。build.md は「コミット上 1 のまま」と書いている。差の原因は要確認（ビルドスクリプトが元へ戻し切れていない可能性）。
+- 外部配布の名前: 表示名「鎮守の里」、`package/name` も同じ。
